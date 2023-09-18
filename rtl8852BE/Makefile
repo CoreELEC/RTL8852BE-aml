@@ -43,15 +43,15 @@ CONFIG_RTL8852A = n
 CONFIG_RTL8852B = y
 CONFIG_RTL8852C = n
 ######################### Interface ###########################
-CONFIG_USB_HCI = n
-CONFIG_PCI_HCI = y
-CONFIG_SDIO_HCI = n
-CONFIG_GSPI_HCI = n
+CONFIG_USB_HCI ?= n
+CONFIG_PCI_HCI ?= y
+CONFIG_SDIO_HCI ?= n
+CONFIG_GSPI_HCI ?= n
 ########################## Features ###########################
 CONFIG_MP_INCLUDED = y
 CONFIG_CONCURRENT_MODE = n
 CONFIG_POWER_SAVING = n
-CONFIG_POWER_SAVE = y
+CONFIG_POWER_SAVE ?= y
 CONFIG_IPS_MODE = default
 CONFIG_LPS_MODE = default
 CONFIG_BTC = y
@@ -120,7 +120,7 @@ EXTRA_CFLAGS += -DCONFIG_RTW_ANDROID=$(CONFIG_RTW_ANDROID)
 endif
 
 ########################## Debug ###########################
-CONFIG_RTW_DEBUG = y
+CONFIG_RTW_DEBUG ?= y
 # default log level is _DRV_INFO_ = 4,
 # please refer to "How_to_set_driver_debug_log_level.doc" to set the available level.
 CONFIG_RTW_LOG_LEVEL = 3
