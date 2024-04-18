@@ -328,9 +328,9 @@ void _8852b_set_wl_lna2(struct btc_t *btc, u8 level)
          * level=1 Fix LNA2=5: TIA 1/0= (LNA2,TIAN6) = (5,0)/(5,1) = 18dB/12dB
          * To improve BT ACI in co-rx
 	 */
-	u32 path = btc->hal->chip_id == CHIP_WIFI6_8851B? RF_PATH_A : RF_PATH_B;
+	u32 path = btc->hal->chip_id == CHIP_WIFI6_8851B? RF_PATH_A : RF_PATH_B;
 	/*3-bit(10~8) value, Bit(10) = 1 for non-shared antenna */
-	u32 val = btc->mdinfo.ant.type == BTC_ANT_DEDICATED? level | 0x4: level;
+	u32 val = btc->mdinfo.ant.type == BTC_ANT_DEDICATED? level | 0x4: level;
 	u32 srcpath = path << 8 | RTW_MAC_RF_CMD_OFLD;
 
 	if (btc->hal->chip_id == CHIP_WIFI6_8851B) {
