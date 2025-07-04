@@ -18,8 +18,14 @@
 
 #include "../type.h"
 #include "fwcmd.h"
-
+#if MAC_FEAT_NAN
 /*--------------------Define ----------------------------------------*/
+#define FWCMD_H2C_NAN_FUNC_CTRL_NAN_RSVD_SH 24
+#define FWCMD_H2C_NAN_FUNC_CTRL_NAN_RSVD_MSK 0xff
+#define FWCMD_H2C_NAN_FUNC_CTRL_NAN_FW_TEST_PARA_1_SH 16
+#define FWCMD_H2C_NAN_FUNC_CTRL_NAN_FW_TEST_PARA_1_MSK 0xff
+#define FWCMD_H2C_NAN_FUNC_CTRL_NAN_FW_TEST_PARA_2_SH 24
+#define FWCMD_H2C_NAN_FUNC_CTRL_NAN_FW_TEST_PARA_2_MSK 0xff
 
 /*--------------------Define Struct-------------------------------------*/
 
@@ -116,4 +122,8 @@ u32 mac_nan_pause_faw_tx(struct mac_ax_adapter *adapter, u32 id_map);
  */
 u32 mac_nan_get_cluster_info(struct mac_ax_adapter *adapter, struct mac_ax_nan_info *cluster_info);
 
+u32 mac_nan_avail_t_bitmap(struct mac_ax_adapter *adapter,
+			   struct mac_ax_nan_avail_t_bitmap_info *info);
+
+#endif
 #endif

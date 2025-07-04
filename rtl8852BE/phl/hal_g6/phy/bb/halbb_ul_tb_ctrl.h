@@ -38,7 +38,6 @@ struct bb_ul_tb_cr_info {
 };
 
 struct bb_ul_tb_info {
-	struct bb_ul_tb_cr_info bb_ul_tb_cr_i;
 	bool	dyn_tb_bedge_en;
 	bool	dyn_tb_tri_en;
 	u8	def_if_bandedge;

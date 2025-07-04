@@ -65,15 +65,23 @@ struct pci_device_id rtw_pci_id_tbl[] = {
 #ifdef CONFIG_RTL8852B
 	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0xB852), .driver_data = RTL8852B},
 	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0xB85B), .driver_data = RTL8852B},
+	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0xB853), .driver_data = RTL8852B},
 #endif
 #ifdef CONFIG_RTL8852BP
 	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0xA85C), .driver_data = RTL8852BP},/*FPGA*/
+#endif
+#ifdef CONFIG_RTL8852BT
+	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0xB520), .driver_data = RTL8852BT},/*FPGA*/
 #endif
 #ifdef CONFIG_RTL8851B
 	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0xB851), .driver_data = RTL8851B},
 #endif
 #ifdef CONFIG_RTL8852C
 	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0xC852), .driver_data = RTL8852C},
+#endif
+#ifdef CONFIG_RTL8852D
+	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0x885D), .driver_data = RTL8852D},
+	{PCI_DEVICE(PCI_VENDER_ID_REALTEK, 0x885E), .driver_data = RTL8852D},
 #endif
 	{},
 };
@@ -130,75 +138,6 @@ void	PlatformClearPciPMEStatus(_adapter *adapter)
 
 	RTW_INFO("PME, value_offset = %x, PME EN = %x\n", pdev->pm_cap + 5, PCIClkReq);
 }
-
-
-
-#ifdef CONFIG_PCI_DYNAMIC_ASPM_LINK_CTRL
-static bool _rtw_pci_set_aspm_lnkctl_reg(struct pci_dev *pdev, u8 mask, u8 val)
-{
-	u8 linkctrl, new_val;
-
-	if (!pdev || !pdev->pcie_cap || !mask)
-		return false;
-
-	pci_read_config_byte(pdev, pdev->pcie_cap + PCI_EXP_LNKCTL, &linkctrl);
-	new_val = (linkctrl & ~mask) | val;
-	if (new_val == linkctrl)
-		return false;
-
-	pci_write_config_byte(pdev, pdev->pcie_cap + PCI_EXP_LNKCTL, new_val);
-
-	return true;
-}
-
-void rtw_pci_set_aspm_lnkctl(_adapter *padapter, u8 mode)
-{
-	struct dvobj_priv *pdvobjpriv = adapter_to_dvobj(padapter);
-	PPCI_DATA pci_data = dvobj_to_pci(pdvobjpriv);
-	struct pci_priv	*pcipriv = &(pci_data->pcipriv);
-	struct pci_dev	*pdev = pci_data->ppcidev;
-	struct pci_dev	*br_pdev = pdev->bus->self;
-	struct registry_priv  *registry_par = &padapter->registrypriv;
-	u32 pci_dynamic_aspm_linkctrl = registry_par->pci_dynamic_aspm_linkctrl;
-	u8 lnkctl_val, lnkctl_mask;
-	u8 dev_lnkctl_val, br_lnkctl_val;
-
-	if (!pci_dynamic_aspm_linkctrl)
-		return;
-
-	switch (mode) {
-	case ASPM_MODE_PERF:
-		lnkctl_val = pci_dynamic_aspm_linkctrl & GENMASK(1, 0);
-		lnkctl_mask = (pci_dynamic_aspm_linkctrl & GENMASK(5, 4)) >> 4;
-		break;
-	case ASPM_MODE_PS:
-		lnkctl_val = (pci_dynamic_aspm_linkctrl & GENMASK(9, 8)) >> 8;
-		lnkctl_mask = (pci_dynamic_aspm_linkctrl & GENMASK(13, 12)) >> 12;
-		break;
-	case ASPM_MODE_DEF:
-		lnkctl_val = 0x0; /* fill val to make checker happy */
-		lnkctl_mask = 0x0;
-		break;
-	default:
-		return;
-	}
-
-	/* if certain mask==0x0, we restore the default value with mask 0x03 */
-	if (lnkctl_mask == 0x0) {
-		lnkctl_mask = PCI_EXP_LNKCTL_ASPMC;
-		dev_lnkctl_val = pcipriv->linkctrl_reg;
-		br_lnkctl_val = pcipriv->pcibridge_linkctrlreg;
-	} else {
-		dev_lnkctl_val = lnkctl_val;
-		br_lnkctl_val = lnkctl_val;
-	}
-
-	if (_rtw_pci_set_aspm_lnkctl_reg(pdev, lnkctl_mask, dev_lnkctl_val))
-		rtw_udelay_os(50);
-	_rtw_pci_set_aspm_lnkctl_reg(br_pdev, lnkctl_mask, br_lnkctl_val);
-}
-#endif
-
 
 static u8 rtw_pci_get_amd_l1_patch(struct dvobj_priv *pdvobjpriv, struct pci_dev *pdev)
 {
@@ -403,12 +342,8 @@ static s32 rtw_pci_parse_configuration(struct pci_dev *pdev, struct dvobj_priv *
  * 2009/10/28 MH Enable rtl8192ce DMA64 function. We need to enable 0x719 BIT5
  *   */
 #ifdef CONFIG_64BIT_DMA
-u8 PlatformEnableDMA64(_adapter *adapter)
+u8 PlatformEnableDMA64(struct pci_dev *pdev)
 {
-	struct dvobj_priv *pdvobjpriv = adapter_to_dvobj(adapter);
-	PPCI_DATA pci_data = dvobj_to_pci(pdvobjpriv);
-	struct pci_dev	*pdev = pci_data->ppcidev;
-	
 	u8	bResult = _TRUE;
 	u8	value;
 
@@ -433,18 +368,20 @@ static irqreturn_t rtw_pci_interrupt(int irq, void *priv, struct pt_regs *regs)
 	PPCI_DATA pci_data = dvobj_to_pci(dvobj);
 	enum rtw_phl_status pstatus =  RTW_PHL_STATUS_SUCCESS;
 	unsigned long sp_flags;
+	/*_adapter *padapter = dvobj_get_primary_adapter(dvobj);*/
 
-	if (pci_data->irq_enabled == 0)
-		return IRQ_HANDLED;
-
+	/*padapter->int_logs.all++;*/
 	_rtw_spinlock_irq(&dvobj->phl_com->imr_lock, &sp_flags);
 	if (rtw_phl_recognize_interrupt(dvobj->phl)) {
+		/*padapter->int_logs.known++;*/
 		pstatus = rtw_phl_interrupt_handler(dvobj->phl);
 	}
 	_rtw_spinunlock_irq(&dvobj->phl_com->imr_lock, &sp_flags);
 
-	if (pstatus == RTW_PHL_STATUS_FAILURE)
+	if (pstatus == RTW_PHL_STATUS_FAILURE) {
+		/*padapter->int_logs.err++;*/
 		return IRQ_HANDLED;
+	}
 	/* return IRQ_NONE; */
 
 	return IRQ_HANDLED;
@@ -459,12 +396,15 @@ int pci_alloc_irq(struct dvobj_priv *dvobj)
 	int err;
 	PPCI_DATA pci_data = dvobj_to_pci(dvobj);
 	struct pci_dev	*pdev = pci_data->ppcidev;
+#ifndef CONFIG_RTW_PCI_MSI_DISABLE
 	int ret;
+#endif
 
 #ifndef CONFIG_RTW_PCI_MSI_DISABLE
-	ret = pci_enable_msi(pdev);
-
-	RTW_INFO("pci_enable_msi ret=%d\n", ret);
+	if (pci_data->msi_en) {
+		ret = pci_enable_msi(pdev);
+		RTW_INFO("pci_enable_msi ret=%d\n", ret);
+	}
 #endif
 
 #if defined(IRQF_SHARED)
@@ -515,13 +455,16 @@ static struct dvobj_priv *pci_dvobj_init(struct pci_dev *pdev,
 
 #ifdef CONFIG_64BIT_DMA
 	if (!dma_set_mask(&pdev->dev, DMA_BIT_MASK(64))) {
-		RTW_INFO("RTL819xCE: Using 64bit DMA\n");
 		err = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(64));
 		if (err != 0) {
 			RTW_ERR("Unable to obtain 64bit DMA for consistent allocations\n");
 			goto disable_picdev;
 		}
+		RTW_INFO("Using 64bit DMA\n");
 		pci_data->bdma64 = _TRUE;
+#if defined (CONFIG_RTL8852A) || defined (CONFIG_RTL8852B) || defined (CONFIG_RTL8852BP) || defined (CONFIG_RTL8852BT)
+		PlatformEnableDMA64(pdev);
+#endif
 	} else
 #endif
 	{
@@ -676,7 +619,8 @@ static void pci_dvobj_deinit(struct pci_dev *pdev)
 		if (pci_data->irq_alloc) {
 			free_irq(pdev->irq, dvobj);
 #ifndef CONFIG_RTW_PCI_MSI_DISABLE
-			pci_disable_msi(pdev);
+			if (pci_data->msi_en)
+				pci_disable_msi(pdev);
 #endif
 			pci_data->irq_alloc = 0;
 		}
@@ -970,17 +914,18 @@ static int rtw_dev_probe(struct pci_dev *pdev, const struct pci_device_id *pdid)
 	}
 #endif
 
-	/* dev_alloc_name && register_netdev */
-	if (rtw_os_ndevs_init(dvobj) != _SUCCESS) {
-		RTW_ERR("rtw_os_ndevs_init Failed!\n");
-		goto free_devobj_data;
-	}
-
 	/* Update link_mlme_priv's ht/vht/he priv from padapter->mlmepriv */
 	rtw_init_link_capab(dvobj);
 
 #ifdef CONFIG_HOSTAPD_MLME
 	hostapd_mode_init(padapter);
+#endif
+
+#ifdef CONFIG_RTW_CSI_NETLINK
+	rtw_csi_nl_init(dvobj);
+#endif
+#ifdef CONFIG_CSI_TIMER_POLLING
+	rtw_csi_poll_init(dvobj);
 #endif
 
 	/* alloc irq */
@@ -993,6 +938,12 @@ static int rtw_dev_probe(struct pci_dev *pdev, const struct pci_device_id *pdid)
 	if (g_pcie_reserved_mem_dev)
 		pdev->dev.dma_mask = NULL;
 #endif
+
+	/* dev_alloc_name && register_netdev */
+	if (rtw_os_ndevs_init(dvobj) != _SUCCESS) {
+		RTW_ERR("rtw_os_ndevs_init Failed!\n");
+		goto free_devobj_data;
+	}
 
 	RTW_INFO("-%s success\n", __func__);
 	return 0; /* _SUCCESS;*/
@@ -1057,6 +1008,12 @@ static void rtw_dev_remove(struct pci_dev *pdev)
 	rtw_phl_disable_interrupt(GET_PHL_INFO(dvobj));
 #endif
 
+#ifdef CONFIG_CSI_TIMER_POLLING
+	rtw_csi_poll_timer_cancel(dvobj);
+#endif
+#ifdef CONFIG_RTW_CSI_NETLINK
+	rtw_csi_nl_exit(dvobj);
+#endif
 	/* TODO: use rtw_os_ndevs_deinit instead at the first stage of driver's dev deinit function */
 	rtw_os_ndevs_unregister(dvobj);
 
@@ -1070,8 +1027,6 @@ static void rtw_dev_remove(struct pci_dev *pdev)
 #ifdef CONFIG_CONCURRENT_MODE
 	rtw_drv_stop_vir_ifaces(dvobj);
 #endif
-	rtw_pci_dynamic_aspm_set_mode(padapter, ASPM_MODE_DEF);
-
 	rtw_drv_stop_prim_iface(padapter);
 
 	rtw_hw_stop(dvobj);

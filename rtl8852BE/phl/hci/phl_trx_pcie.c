@@ -958,6 +958,9 @@ static enum rtw_phl_status enqueue_h2c_work_ring(
 	work_done_h2c = ring[*idx];
 	ring[*idx] = h2c;
 	*idx = (*idx + 1) % *cnt;
+#ifdef CONFIG_PHL_H2C_PKT_POOL_STATS_CHECK
+	work_done_h2c->pkt_src = h2c->pkt_src;
+#endif
 
 	_os_spinunlock(drv_priv, &h2c_work->lock, _bh, NULL);
 
@@ -1303,6 +1306,7 @@ _phl_free_local_buf_pcie(struct phl_info_t *phl_info, struct rtw_xmit_req *treq)
 	struct rtw_phl_evt_ops *ops = &phl_info->phl_com->evt_ops;
 	void *drv_priv = phl_to_drvpriv(phl_info);
 	struct tx_local_buf *local_buf = NULL;
+	int local_buf_size = sizeof(struct tx_local_buf);
 #ifdef RTW_TX_COALESCE_BAK_PKT_LIST
 	struct rtw_pkt_buf_list *pkt_list;
 	int i;
@@ -1318,13 +1322,14 @@ _phl_free_local_buf_pcie(struct phl_info_t *phl_info, struct rtw_xmit_req *treq)
 	for (i = 0; i < local_buf->pkt_cnt; i++)
 		pkt_list[i] = local_buf->pkt_list[i];
 	treq->pkt_cnt = local_buf->pkt_cnt;
+	local_buf_size += treq->pkt_cnt * sizeof(local_buf->pkt_list[0]);
 #endif
 
 	if (local_buf->vir_addr) {
 		if (ops->os_return_local_buf)
 			ops->os_return_local_buf(drv_priv, local_buf);
 	}
-	_os_kmem_free(drv_priv, treq->local_buf, sizeof(struct tx_local_buf));
+	_os_kmem_free(drv_priv, treq->local_buf, local_buf_size);
 	treq->local_buf = NULL;
 }
 
@@ -1370,8 +1375,7 @@ _phl_alloc_local_buf_pcie(struct phl_info_t *phl_info,
 		ops->os_query_local_buf(drv_priv, local_buf);
 
 	if (!local_buf->vir_addr) {
-		_os_kmem_free(drv_priv, treq->local_buf,
-		             sizeof(struct tx_local_buf));
+		_os_kmem_free(drv_priv, treq->local_buf, local_buf_size);
 		treq->local_buf = NULL;
 		PHL_INFO("query local buffer fail!\n");
 		sts = RTW_PHL_STATUS_RESOURCE;
@@ -1895,10 +1899,10 @@ _phl_alloc_rxbuf_pool_pcie(struct phl_info_t *phl_info, u8 ch_num)
 /* } */
 
 static void _phl_free_wd_page_pcie(struct phl_info_t *phl_info,
-					struct rtw_wd_page_ring *wd_page_ring)
+					struct rtw_wd_page_ring *wd_page_ring,
+					struct rtw_wd_page *wd_page)
 {
 	void *rtw_dma_pool = NULL;
-	struct rtw_wd_page *wd_page = wd_page_ring->wd_page;
 	u16 i = 0, wd_num = 0;
 #ifdef CONFIG_WD_PAGE_NONCACHE_ADDR
 	rtw_dma_pool = phl_info->hci->wd_dma_pool;
@@ -1972,7 +1976,8 @@ static void _phl_free_wd_ring_pcie(struct phl_info_t *phl_info, u8 *wd_page_buf,
 							&wd_page_ring[i]);
 			}
 			_phl_free_wd_work_ring(phl_info, &wd_page_ring[i]);
-			_phl_free_wd_page_pcie(phl_info, &wd_page_ring[i]);
+			_phl_free_wd_page_pcie(phl_info, &wd_page_ring[i],
+			                       wd_page_ring[i].wd_page);
 			wd_page_ring[i].wd_page = NULL;
 			_os_spinlock_free(drv_priv,
 						&wd_page_ring[i].idle_lock);
@@ -2144,7 +2149,7 @@ static struct rtw_wd_page *_phl_alloc_wd_page_pcie(
 	}
 
 	if (RTW_PHL_STATUS_SUCCESS != pstatus) {
-		_phl_free_wd_page_pcie(phl_info, wd_page_ring);
+		_phl_free_wd_page_pcie(phl_info, wd_page_ring, wd_page);
 		wd_page = NULL;
 	}
 
@@ -3607,6 +3612,10 @@ phl_handle_pending_wd(struct phl_info_t *phl_info,
 				wd_ring->cur_hw_res -= cnt;
 			else
 				wd_ring->cur_hw_res = 0;
+
+			#ifdef CONFIG_PHL_OFDMA_GROUP_STATISTIC
+			phl_com->trigger_txstart_ok++;
+			#endif
 		}
 	}
 
@@ -4474,6 +4483,10 @@ enum rtw_phl_status phl_pltfm_tx_pcie(struct phl_info_t *phl_info, void *pkt)
 
 	h2c_pkt->host_idx = wd.host_idx;
 
+#ifdef CONFIG_PHL_H2C_PKT_POOL_STATS_CHECK
+	phl_set_h2c_pkt_alloc_cnt(phl_info, h2c_pkt);
+#endif
+
 	PHL_TRACE(COMP_PHL_DBG, _PHL_DEBUG_, "%s : h2c_pkt->host_idx %d.\n", __func__, h2c_pkt->host_idx);
 
 	if (RTW_HAL_STATUS_SUCCESS == hstatus)
@@ -4711,27 +4724,6 @@ enum rtw_phl_status phl_hook_trx_ops_pci(struct phl_info_t *phl_info)
 		pstatus = RTW_PHL_STATUS_SUCCESS;
 	}
 
-	return pstatus;
-}
-
-enum rtw_phl_status phl_cmd_set_l2_leave(struct phl_info_t *phl_info)
-{
-	enum rtw_phl_status pstatus = RTW_PHL_STATUS_FAILURE;
-
-#ifdef CONFIG_CMD_DISP
-	pstatus = phl_cmd_enqueue(phl_info, HW_BAND_0, MSG_EVT_HAL_SET_L2_LEAVE, NULL, 0, NULL, PHL_CMD_WAIT, 0);
-
-	if (is_cmd_failure(pstatus)) {
-		/* Send cmd success, but wait cmd fail*/
-		pstatus = RTW_PHL_STATUS_FAILURE;
-	} else if (pstatus != RTW_PHL_STATUS_SUCCESS) {
-		/* Send cmd fail */
-		pstatus = RTW_PHL_STATUS_FAILURE;
-	}
-#else
-	if (rtw_hal_set_l2_leave(phl_info->hal) == RTW_HAL_STATUS_SUCCESS)
-		pstatus = RTW_PHL_STATUS_SUCCESS;
-#endif
 	return pstatus;
 }
 

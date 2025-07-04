@@ -23,9 +23,8 @@
 #include "../phl_config.h"
 #include "../phl_types.h"
 #include "../phl_regulation_def.h"
-#include "../phl_chnlplan.h"
-#include "../phl_country.h"
 #include "../phl_txpwr.h"
+#include "../phl_version.h"
 /* Exported structure/definition from PHL */
 #include "../phl_util.h"
 #include "mac/mac_exp_def.h"
@@ -54,8 +53,10 @@
 #include "hal_general_def.h"
 /* Exported structure/definition from HAL */
 #include "hal_config.h"
+#include "phy/bb/halbb_bb_wrapper_outsrc.h"
 #include "hal_def.h"
 #include "phy/bb/halbb_outsrc_def.h"
+#include "phy/rf/halrf_outsrc_def.h"
 #include "mac/mac_outsrc_def.h"
 
 /*
@@ -75,7 +76,7 @@ static inline void hal_mdelay(struct rtw_hal_com_t *h, int ms)
 }
 static inline void hal_udelay(struct rtw_hal_com_t *h, int us)
 {
-	_os_delay_ms(halcom_to_drvpriv(h), us);
+	_os_delay_us(halcom_to_drvpriv(h), us);
 }
 
 static inline void hal_msleep(struct rtw_hal_com_t *h, int ms)
@@ -296,7 +297,7 @@ static inline u8 hal_sdio_read_cia_r8(struct rtw_hal_com_t *h, u32 addr)
 #else
 /*please refer to hal_pltfm_ops.h*/
 #define hal_mdelay(h, ms)	_os_delay_ms(halcom_to_drvpriv(h), ms)
-#define hal_udelay(h, us)	_os_delay_ms(halcom_to_drvpriv(h), us)
+#define hal_udelay(h, us)	_os_delay_us(halcom_to_drvpriv(h), us)
 #define hal_msleep(h, ms)	_os_sleep_ms(halcom_to_drvpriv(h),ms)
 #define hal_usleep(h, us)	_os_sleep_us(halcom_to_drvpriv(h), us)
 

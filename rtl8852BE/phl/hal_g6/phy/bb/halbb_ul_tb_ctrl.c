@@ -25,10 +25,11 @@
 #include "halbb_precomp.h"
 
 #ifdef HALBB_UL_TB_CTRL_SUPPORT
+bool flag_prv_wa_en = 0;
 void halbb_ul_tb_reset(struct bb_info *bb)
 {
 	struct bb_ul_tb_info *bb_ul_tb = &bb->bb_ul_tb_i;
-	struct bb_ul_tb_cr_info *cr = &bb->bb_ul_tb_i.bb_ul_tb_cr_i;
+	struct bb_ul_tb_cr_info *cr = &bb->bb_cmn_hooker->bb_ul_tb_cr_i;
 	struct rtw_tpu_info *tpu = &bb->hal_com->band[bb->bb_phy_idx].rtw_tpu_i;
 	struct bb_api_info *bb_api = &bb->bb_api_i;
 	bool is_ofdm = true;
@@ -42,7 +43,7 @@ void halbb_ul_tb_reset(struct bb_info *bb)
 void halbb_ul_tb_chk(struct bb_info *bb)
 {
 	struct bb_ul_tb_info *bb_ul_tb = &bb->bb_ul_tb_i;
-	struct bb_ul_tb_cr_info *cr = &bb->bb_ul_tb_i.bb_ul_tb_cr_i;
+	struct bb_ul_tb_cr_info *cr = &bb->bb_cmn_hooker->bb_ul_tb_cr_i;
 	struct bb_api_info *bb_api = &bb->bb_api_i;
 	struct rtw_tpu_info *tpu = &bb->hal_com->band[bb->bb_phy_idx].rtw_tpu_i;
 
@@ -74,15 +75,17 @@ void halbb_ul_tb_ctrl(struct bb_info *bb)
 	struct bb_link_info *bb_link = &bb->bb_link_i;
 	struct rtw_phl_com_t *phl = bb->phl_com;
 	struct dev_cap_t *dev = &phl->dev_cap;
-	struct rtw_phl_stainfo_t *sta;
-	struct bb_ul_tb_cr_info *cr = &bb->bb_ul_tb_i.bb_ul_tb_cr_i;
+	struct rtw_phl_stainfo_t *sta = NULL;
+	struct bb_ul_tb_cr_info *cr = &bb->bb_cmn_hooker->bb_ul_tb_cr_i;
 	struct bb_api_info *bb_api = &bb->bb_api_i;
 	struct rtw_tpu_info *tpu = &bb->hal_com->band[bb->bb_phy_idx].rtw_tpu_i;
 	bool is_ofdm = true;
 	u8 num_high_tf_client = 0;
 	u8 num_low_tf_client = 0;
 	u8 num_active_client = 0;
-	u32 i = 0;
+	u16 i = 0;
+
+	halbb_show_cr_cnt(bb, BB_WD_UL_TB_CTRL);
 
 	BB_DBG(bb, DBG_UL_TB_CTRL, "[%s]\n", __func__);
 
@@ -124,6 +127,21 @@ void halbb_ul_tb_ctrl(struct bb_info *bb)
 
 		BB_DBG(bb, DBG_UL_TB_CTRL, "[%d] macid=%d, rx_tf_cnt = %d, pre_rx_tf_cnt = %d, diff = %d\n", i, sta->macid, sta->stats.rx_tf_cnt, sta->stats.pre_rx_tf_cnt, sta->stats.rx_tf_cnt - sta->stats.pre_rx_tf_cnt);
 		sta->stats.pre_rx_tf_cnt = sta->stats.rx_tf_cnt;
+
+		// WA of power diff large between peramble portion and data portion
+		if (sta->flag_pwr_diff_large == 1){
+			if (flag_prv_wa_en == 0){
+				flag_prv_wa_en = 1;
+				halbb_pwr_diff_wa_enable(bb, bb->bb_phy_idx);
+			}
+			sta->flag_pwr_diff_large = 0;
+		}
+		else {
+			if (flag_prv_wa_en == 1){
+				flag_prv_wa_en = 0;		
+				halbb_pwr_diff_wa_disable(bb, bb->bb_phy_idx);
+			}
+		}
 	}
 
 	BB_DBG(bb, DBG_UL_TB_CTRL, "num_high_tf_client = %d, num_low_tf_client = %d\n", num_high_tf_client, num_low_tf_client);
@@ -219,7 +237,7 @@ void halbb_ul_tb_ctrl_init(struct bb_info *bb)
 
 void halbb_cr_cfg_ul_tb_init(struct bb_info *bb)
 {
-	struct bb_ul_tb_cr_info *cr = &bb->bb_ul_tb_i.bb_ul_tb_cr_i;
+	struct bb_ul_tb_cr_info *cr = &bb->bb_cmn_hooker->bb_ul_tb_cr_i;
 
 	switch (bb->cr_type) {
 

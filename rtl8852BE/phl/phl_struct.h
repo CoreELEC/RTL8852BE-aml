@@ -35,6 +35,7 @@ struct hci_info_t {
 	void *h2c_dma_pool;
 #elif defined(CONFIG_USB_HCI)
 	u16 usb_bulkout_size;
+	bool usb_in_rx_start;
 #elif defined(CONFIG_SDIO_HCI)
 	u32 tx_drop_cnt;	/* bit31 means overflow or not */
 #ifdef SDIO_TX_THREAD
@@ -338,9 +339,9 @@ struct phl_info_t {
 	struct macid_ctl_t macid_ctrl;
 	struct stainfo_ctl_t sta_ctrl;
 	struct mld_ctl_t mld_ctrl;
+	struct phl_acs_info *acs_info;
 
-	struct rtw_regulation regulation;
-
+	struct rtw_regulation_interface rg_interface;
 	struct rtw_phl_com_t *phl_com;
 	struct rtw_phl_handler phl_tx_handler;
 	struct rtw_phl_handler phl_rx_handler;
@@ -359,13 +360,16 @@ struct phl_info_t {
 	_os_lock t_ring_list_lock;
 	_os_lock rx_ring_lock;
 	_os_lock t_fctrl_result_lock;
-	_os_lock t_ring_free_list_lock;
 	_os_list t_ring_list;
 	_os_list t_fctrl_result;
-	_os_list t_ring_free_list;
+	struct phl_queue t_ring_free_q;
 	void *ring_sts_pool;
 	void *rx_pkt_pool;
 	struct phl_h2c_pkt_pool *h2c_pool;
+#ifdef CONFIG_PHL_H2C_PKT_POOL_STATS_CHECK
+	struct phl_h2c_pkt_alloc_cnt h2c_alloc_cnt;
+	struct rtw_h2c_pkt_return_list h2c_pkt_return_list;
+#endif
 
 	struct hci_info_t *hci;
 	struct phl_hci_trx_ops *hci_trx_ops;
@@ -394,7 +398,13 @@ struct phl_info_t {
 
 	void *led_ctrl;
 
+#ifdef CONFIG_QOS_MG
+	void *qm_ctrl; /* struct qm_ctrl_info */
+#endif /* CONFIG_QOS_MG */
 	void *ecsa_ctrl;
+#ifdef CONFIG_PHL_TDLS
+	struct phl_tdls_info_t tdls_info;
+#endif
 	void *phl_twt_info; /* struct phl_twt_info */
 #ifdef PHL_RX_BATCH_IND
 	u8 rx_new_pending;
@@ -410,12 +420,9 @@ struct phl_info_t {
 	struct phl_ps_info ps_info;
 #endif
 
-#ifdef CONFIG_RTW_ACS
-	void *acs_info;
-#endif
-
 #ifdef CONFIG_PHL_TEST_SUITE
 	void *trx_test;
+	struct rtw_phl_handler sw_tx_handler;
 #endif
 
 	struct gtimer_ctx gt3_ctx;

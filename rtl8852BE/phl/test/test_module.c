@@ -222,12 +222,15 @@ int test_thread(void *param)
 			} else if (obj->submd_test_mode == INTGR_TEST_MODE) {
 				PHL_INFO("[TM]: %s INTGR_TEST_MODE \n", __FUNCTION__);
 				thread = &obj->objthread;
-				_os_thread_init(d, thread, run_test, obj, obj->test_obj.name);
+				if (RTW_PHL_STATUS_SUCCESS != _os_thread_init(d, thread, run_test, obj, obj->test_obj.name)) {
+					PHL_ERR("[TM]: thread init run_test fail. return.\n");
+				}
 				_os_thread_schedule(d, thread);
 			}
 			test_mgnt->cur_test_obj = NULL;
 		}
 	}
+	_os_thread_wait_stop(d, &test_mgnt->thread);
 	CLEAR_STATUS_FLAG(test_mgnt->status, TM_STATUS_THREAD_START);
 	PHL_INFO("[TM]: test mgnt thread is down\n");
 	return 0;
@@ -354,7 +357,10 @@ u8 phl_test_module_start(struct rtw_phl_com_t* phl_com)
 
 	thread = &(test_mgnt->thread);
 	_os_sema_init(d, &(test_mgnt->busy_chk), 0);
-	_os_thread_init(d, thread, test_thread, thread, "test_thread");
+	if (RTW_PHL_STATUS_SUCCESS != _os_thread_init(d, thread, test_thread, thread, "test_thread")) {
+		PHL_ERR("[TM]: thread init test_thread fail. return false.\n");
+		return false;
+	}
 	_os_thread_schedule(d, thread);
 	PHL_INFO("[TM]: %s\n",__FUNCTION__);
 	return true;
@@ -538,8 +544,10 @@ u8 init_obj_thread(struct test_mgnt_info *test_mgnt,
 
 	switch(lvl){
 	case TEST_LVL_LOW:
-	case TEST_LVL_NORMAL:
 		obj->handler.type = RTW_PHL_HANDLER_PRIO_LOW;
+		break;
+	case TEST_LVL_NORMAL:
+		obj->handler.type = RTW_PHL_HANDLER_PRIO_NORMAL;
 		break;
 	case TEST_LVL_HIGH:
 		obj->handler.type = RTW_PHL_HANDLER_PRIO_HIGH;
@@ -671,11 +679,20 @@ void rtw_phl_test_submodule_init(struct rtw_phl_com_t* phl_com, void *buf)
 {
 	struct test_mgnt_info *test_mgnt = (struct test_mgnt_info *)phl_com->test_mgnt;
 	struct test_module_info *tm_info = NULL;
+#ifdef RTW_MP_INIT_IN_MP_START
+	enum rtw_phl_status phl_status = RTW_PHL_STATUS_FAILURE;
+#endif
 
 	if(buf == NULL)
 		return;
 
 	tm_info = (struct test_module_info *)buf;
+
+#ifdef RTW_MP_INIT_IN_MP_START
+	phl_status = phl_trx_test_init(test_mgnt->phl);
+	if (phl_status != RTW_PHL_STATUS_SUCCESS)
+		PHL_ERR("phl_trx_test_init failed\n");
+#endif
 
 	switch(tm_info->tm_type) {
 		case TEST_SUB_MODULE_MP:
@@ -723,6 +740,10 @@ void rtw_phl_test_submodule_deinit(struct rtw_phl_com_t* phl_com, void *buf)
 		default:
 			break;
 	}
+
+#ifdef RTW_MP_INIT_IN_MP_START
+	phl_trx_test_deinit(test_mgnt->phl);
+#endif
 }
 
 void
