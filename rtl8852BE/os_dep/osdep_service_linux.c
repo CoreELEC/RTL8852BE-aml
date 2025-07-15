@@ -613,7 +613,7 @@ static int retriveFromFile(const char *path, u8 *buf, u32 sz)
 			goto err;
 		}
 	} else {
-		RTW_ERR("%s() Fail. retrieve file : %s, error : %d\n", __func__, name, ret);
+		RTW_DBG("%s() Fail. retrieve file : %s, error : %d\n", __func__, name, ret);
 		goto err;
 	}
 
