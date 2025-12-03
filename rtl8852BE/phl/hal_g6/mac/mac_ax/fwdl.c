@@ -1186,7 +1186,7 @@ static u32 fwdl_phase0(struct mac_ax_adapter *adapter)
 	while (--cnt) {
 		if (MAC_REG_R8(R_AX_WCPU_FW_CTRL) & B_AX_H2C_PATH_RDY)
 			break;
-		PLTFM_DELAY_US(1);
+		PLTFM_DELAY_MS(10);
 	}
 
 	if (!cnt) {
@@ -1222,7 +1222,7 @@ static u32 fwdl_phase1(struct mac_ax_adapter *adapter,
 	while (--cnt) {
 		if (MAC_REG_R8(R_AX_WCPU_FW_CTRL) & B_AX_FWDL_PATH_RDY)
 			break;
-		PLTFM_DELAY_US(1);
+		PLTFM_DELAY_MS(10);
 	}
 
 	if (!cnt) {
@@ -1470,7 +1470,7 @@ static u32 check_fw_rdy(struct mac_ax_adapter *adapter)
 			PLTFM_MSG_ERR("[ERR]%s: 0x1E0[7:5] last value = %d\n", __func__, val8);
 			return MACFWCUT;
 		}
-		PLTFM_DELAY_US(1);
+		PLTFM_DELAY_MS(10);
 	}
 
 	if (!cnt) {
