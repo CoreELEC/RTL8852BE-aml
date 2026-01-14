@@ -650,6 +650,8 @@ void rtw_hal_final_cap_decision(struct rtw_phl_com_t *phl_com, void *hal)
 		dev_cap->rfk_fcs_num = dev_hw_cap->rfk_fcs_num;
 	}
 #endif
+
+	dev_cap->tx_ring_tid_rr = dev_sw_cap->tx_ring_tid_rr;
 }
 
 /**

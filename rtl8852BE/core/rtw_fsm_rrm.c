@@ -34,13 +34,19 @@
 #define DBG_BCN_REQ_SSID	0
 #define DBG_BCN_REQ_SSID_NAME	"RealKungFu"
 
-#define RM_REQ_TIMEOUT		10000	/* 10 seconds */
-#define RM_MEAS_TIMEOUT		2000	/*  2 seconds */
+#define RM_REQ_TIMEOUT		5000	/*  5 seconds */
+#if CONFIG_IEEE80211_BAND_6GHZ
+#define RM_MEAS_TIMEOUT		15000	/* 15 seconds */
+#else
+#define RM_MEAS_TIMEOUT		10000	/* 10 seconds */
+#endif
 #define RM_REPT_SCAN_INTVL	5000	/*  5 seconds */
 #define RM_REPT_POLL_INTVL	2000	/*  2 seconds */
 #define RM_COND_INTVL		2000	/*  2 seconds */
 #define RM_BUSY_TRAFFIC_TIMES	2
 #define RM_WAIT_BUSY_TIMEOUT	2000	/*  1 seconds */
+#define RM_NB_REP_VALID_TIME	10000	/* 10 seconds */
+
 
 #define MEAS_REP_MOD_LATE	BIT(0)
 #define MEAS_REP_MOD_INCAP	BIT(1)
@@ -404,6 +410,7 @@ struct rrm_obj {
 	_list list;
 };
 
+static void rrm_upd_nb_ch_list(struct rrm_obj *prm, struct rrm_nb_rpt *pnb_rpt);
 /*
  * rrm sub function
  */
@@ -632,6 +639,11 @@ static u8 rm_get_ch_set_from_bcn_req_opt(struct rrm_obj *prm, struct bcn_req_opt
 		ap_ch_rpt = opt->ap_ch_rpt[i];
 		band = rtw_get_band_by_op_class(ap_ch_rpt->global_op_class);
 
+		if (band >= BAND_MAX) {
+			FSM_WARN(prm, "%s: skip unknown opc:%d\n", __func__, ap_ch_rpt->global_op_class);
+			continue;
+		}
+
 		if ((k + ap_ch_rpt->Len) > pch_num) {
 			RTW_ERR("rrm: ch num exceed %d > %d\n", (k + ap_ch_rpt->Len), pch_num);
 			return k;
@@ -746,7 +758,7 @@ static u8 rrm_gen_dialog_token(_adapter *padapter)
 
 	do {
 		pmlmeinfo->dialogToken++;
-	} while (pmlmeinfo->dialogToken == 0);
+	} while (pmlmeinfo->dialogToken == 0); /* Valid range : 1-255*/
 	return pmlmeinfo->dialogToken;
 }
 
@@ -1571,7 +1583,10 @@ int rrm_recv_radio_mens_req(_adapter *padapter,
 
 	switch (prm->q.m_type) {
 	case bcn_req:
-		rrm_parse_meas_req(prm, pmeas_body);
+		if (!rrm_parse_meas_req(prm, pmeas_body)) {
+			rm_set_rep_mode(prm, MEAS_REP_MOD_INCAP);
+			goto fail;
+		}
 		switch (prm->q.s_mode) {
 		case bcn_req_passive:
 			rm_en_cap_chk_and_set(prm, RM_BCN_PASSIVE_MEAS_CAP_EN);
@@ -1760,30 +1775,48 @@ int rrm_recv_link_mens_rep(_adapter *padapter,
 	FSM_TRACE(prm, "RCPI        = %d\n", pmeas_body[6]);
 	FSM_TRACE(prm, "RSNI        = %d\n", pmeas_body[7]);
 
-	FSM_INFO(prm, "rx  link_meas_report (" MAC_FMT ")\n", MAC_ARG(obj2mac(prm)));
+	FSM_INFO(prm, "rx link_meas_report (" MAC_FMT ")\n", MAC_ARG(obj2mac(prm)));
 
 	rtw_fsm_gen_msg(prm, NULL, 0, RRM_EV_recv_rep);
 
 	return ret;
 }
 
+static void rtw_rrm_dump_nb_rpt(struct rrm_obj *prm, struct rrm_nb_rpt * nb_rpt)
+{
+	int i;
+	struct rrm_nb_list *pnb_list = nb_rpt->nb_list;
 
-int rm_radio_mens_nb_rep(_adapter *padapter,
+	for (i = 0; i < nb_rpt->nb_list_num; i++) {
+		FSM_INFO(prm, "NB %d("MAC_FMT") bss_info=0x%08X opc=0x%02X ch:%d "
+			"phy_type=0x%02X pref=%d\n", i + 1,
+			MAC_ARG(pnb_list[i].ent.bssid),
+			pnb_list[i].ent.bss_info,
+			pnb_list[i].ent.reg_class,
+			pnb_list[i].ent.ch_num,
+			pnb_list[i].ent.phy_type,
+			pnb_list[i].preference);
+	}
+}
+
+int rm_radio_mens_nb_rpt(_adapter *padapter,
 	union recv_frame *precv_frame, struct sta_info *psta)
 {
 	struct rrm_priv *prmpriv = &padapter->fsmpriv.rmpriv;
+	struct rrm_priv *rrmpriv;
+	struct rrm_obj *prm;
 	u8 *pdiag_body = (u8 *)(precv_frame->u.hdr.rx_data +
 		sizeof(struct rtw_ieee80211_hdr_3addr));
 	u8 *pmeas_body = &pdiag_body[3];
 	u32 len = precv_frame->u.hdr.len;
 	u16 cid;
-	struct rrm_obj *prm;
 
 	cid = rrm_cal_cid(pdiag_body[2], RM_MASTER);
 	prm = rtw_fsm_get_obj(prmpriv->fsm, cid);
 	if (prm == NULL) {
 		/* not belong to us, report to upper */
 		rtw_cfg80211_rx_rrm_action(padapter, precv_frame);
+		RTW_WARN("%s() dialog token 0x%02x not found\n", __func__, pdiag_body[2]);
 		return _TRUE;
 	}
 
@@ -1791,22 +1824,16 @@ int rm_radio_mens_nb_rep(_adapter *padapter,
 	prm->p.diag_token = pdiag_body[2];
 	prm->p.e_id = pmeas_body[0];
 
-	FSM_INFO(prm, "rx  neighbor report (" MAC_FMT ")\n", MAC_ARG(obj2mac(prm)));
+	FSM_INFO(prm, "rx neighbor report (" MAC_FMT ")\n", MAC_ARG(obj2mac(prm)));
 
-	FSM_TRACE(prm, "element_id = %d\n", prm->p.e_id);
-	FSM_TRACE(prm, "length = %d\n", (int)pmeas_body[1]);
+	rrmpriv = obj2priv(prm);
+	rrm_parse_nb_list(&rrmpriv->nb_rpt, pdiag_body + 3,
+		(len - sizeof(struct rtw_ieee80211_hdr_3addr)));
+	rrm_sort_nb_list(&rrmpriv->nb_rpt);
+	rrm_upd_nb_ch_list(prm, &rrmpriv->nb_rpt);
+	rtw_rrm_dump_nb_rpt(prm, &rrmpriv->nb_rpt);
 
 	rtw_fsm_gen_msg(prm, NULL, 0, RRM_EV_recv_rep);
-
-#ifdef CONFIG_RTW_MBO
-#ifdef CONFIG_LAYER2_ROAMING
-	if (rtw_wnm_btm_candidates_survey(padapter
-			,(pdiag_body + 3)
-			,(len - sizeof(struct rtw_ieee80211_hdr_3addr))
-			,_FALSE) == _FAIL)
-		return _FALSE;
-#endif
-#endif
 	rtw_cfg80211_rx_rrm_action(padapter, precv_frame);
 
 	return _TRUE;
@@ -1884,7 +1911,7 @@ unsigned int rrm_on_action(_adapter *padapter, union recv_frame *precv_frame)
 
 	case RM_ACT_NB_REP_RESP:
 		//RTW_INFO("RRM: RM_ACT_NB_REP_RESP\n");
-		ret = rm_radio_mens_nb_rep(padapter, precv_frame, psta);
+		ret = rm_radio_mens_nb_rpt(padapter, precv_frame, psta);
 		break;
 
 	default:
@@ -1952,7 +1979,6 @@ static u8 *rm_gen_bcn_detail_1_elem(u8 *pframe, u8 frag_id,
 	struct rrm_obj *prm, u8 **ies, u32 *ie_len, unsigned int *fr_len)
 {
 	unsigned int my_len = 0;
-	_adapter *padapter = obj2adp(prm);
 	int j = 0, k, len;
 	u8 *plen;
 	u8 *ptr;
@@ -2542,7 +2568,7 @@ int rrm_issue_nb_req(struct rrm_obj *prm)
 		u8 sub_ie[64] = {0};
 		u8 *pie = &sub_ie[2];
 
-		FSM_INFO(prm, "tx NB Req to search %s\n",
+		FSM_INFO(prm, "tx neighbor request to search %s\n",
 			pmlmepriv->cur_network.network.Ssid.Ssid);
 
 		val8 = strlen(prm->q.pssid);
@@ -2928,6 +2954,8 @@ int rrm_issue_radio_meas_req(struct rrm_obj *prm)
 
 static int rrm_issue_meas_req(struct rrm_obj *prm)
 {
+	struct rrm_priv *rrmpriv = obj2priv(prm);
+
 	switch (prm->q.action_code) {
 	case RM_ACT_RADIO_MEAS_REQ:
 		switch (prm->q.m_type) {
@@ -2941,7 +2969,9 @@ static int rrm_issue_meas_req(struct rrm_obj *prm)
 		} /* meas_type */
 		break;
 	case RM_ACT_NB_REP_REQ:
-		/* issue neighbor request */
+		/* invilid NB report */
+		rrmpriv->nb_rpt.last_update = 0;
+		/* issue NB report request */
 		rrm_issue_nb_req(prm);
 		break;
 	case RM_ACT_LINK_MEAS_REQ:
@@ -3008,9 +3038,11 @@ int retrieve_radio_meas_result(struct rrm_obj *prm)
 #ifdef CONFIG_RTW_ACS
 	struct dvobj_priv *dvobj = adapter_to_dvobj(obj2adp(prm));
 #endif
-	int i, ch = -1;
+	int i;
 	u8 val8;
 
+#if 0
+	int ch = -1;
 
 	ch = rtw_chset_search_bch(adapter_to_chset(obj2adp(prm)),
 		prm->q.band, prm->q.ch_num);
@@ -3019,7 +3051,7 @@ int retrieve_radio_meas_result(struct rrm_obj *prm)
 		FSM_ERR(prm, "get ch(CH:%d) fail\n", prm->q.ch_num);
 		ch = 0;
 	}
-
+#endif
 	switch (prm->q.m_type) {
 	case ch_load_req:
 #if 0 /* def CONFIG_RTW_ACS */
@@ -3199,7 +3231,6 @@ void rm_dbg_list_sta(_adapter *padapter, char *s)
 	struct sta_info *psta;
 	struct sta_priv *pstapriv = &padapter->stapriv;
 	_list *plist, *phead;
-
 
 	sprintf(pstr(s), "\n");
 	_rtw_spinlock_bh(&pstapriv->sta_hash_lock);
@@ -3678,7 +3709,7 @@ int verify_bcn_req(_adapter *padapter, struct sta_info *psta)
 	u8 req[] = {1,2,3};
 	u8 req_len = sizeof(req);
 
-
+	/* TODO: use system OP class */
 	static RT_OPERATING_CLASS US[] = {
 	/* 0, OP_CLASS_NULL */	//{  0,  0, {}},
 	/* 1, OP_CLASS_1 */	{115,  4, {36, 40, 44, 48}},
@@ -3714,11 +3745,11 @@ static int rrm_idle_st_hdl(void *obj, u16 event, void *param)
 
 		rrm_enqueue_rm(obj2priv(prm) ,prm, 0);
 
+		prm->p.diag_token = prm->q.diag_token;
 		switch (prm->q.action_code) {
 		case RM_ACT_RADIO_MEAS_REQ:
 			/* copy attrib from meas_req to meas_rep */
 			prm->p.action_code = RM_ACT_RADIO_MEAS_REP;
-			prm->p.diag_token = prm->q.diag_token;
 			prm->p.e_id = _MEAS_RSP_IE_;
 			prm->p.m_token = prm->q.m_token;
 			prm->p.m_type = prm->q.m_type;
@@ -3746,7 +3777,6 @@ static int rrm_idle_st_hdl(void *obj, u16 event, void *param)
 			FSM_DBG(prm, "Neighbor request\n");
 			break;
 		case RM_ACT_LINK_MEAS_REQ:
-			prm->p.diag_token = prm->q.diag_token;
 			prm->p.action_code = RM_ACT_LINK_MEAS_REP;
 			FSM_DBG(prm, "Link meas\n");
 			break;
@@ -3808,6 +3838,8 @@ static int rrm_do_meas_st_hdl(void *obj, u16 event, void *param)
 {
 	struct rrm_obj *prm = (struct rrm_obj *)obj;
 	_adapter *padapter = obj2adp(prm);
+	struct mlme_ext_priv *pmlmeext = &padapter->mlmeextpriv;
+	struct mlme_ext_info *pmlmeinfo = &(pmlmeext->mlmext_info);
 	u8 val8;
 	u64 val64;
 
@@ -3882,6 +3914,10 @@ static int rrm_do_meas_st_hdl(void *obj, u16 event, void *param)
 		rtw_fsm_set_alarm(prm, RM_MEAS_TIMEOUT, RRM_EV_meas_timer_expire);
 		break;
 	case FSM_EV_SCAN_DONE:
+		if (pmlmeinfo->state == WIFI_FW_NULL_STATE) {
+			rtw_fsm_st_goto(prm, RRM_ST_END);
+			return _SUCCESS;
+		}
 		if (prm->q.action_code == RM_ACT_RADIO_MEAS_REQ) {
 			switch (prm->q.m_type) {
 			case bcn_req:
@@ -3956,6 +3992,7 @@ static int rrm_do_meas_st_hdl(void *obj, u16 event, void *param)
 static int rrm_wait_meas_st_hdl(void *obj, u16 event, void *param)
 {
 	struct rrm_obj *prm = (struct rrm_obj *)obj;
+	_adapter *a = obj2adp(prm);
 
 	switch (event) {
 	case FSM_EV_STATE_IN:
@@ -3975,6 +4012,8 @@ static int rrm_wait_meas_st_hdl(void *obj, u16 event, void *param)
 		break;
 	case FSM_EV_STATE_OUT:
 		rtw_fsm_cancel_alarm(prm);
+		if (prm->q.action_code == RM_ACT_NB_REP_REQ) /* always make it valid */
+			a->fsmpriv.rmpriv.nb_rpt.last_update = rtw_get_current_time();
 		break;
 	default:
 		break;
@@ -3985,11 +4024,18 @@ static int rrm_wait_meas_st_hdl(void *obj, u16 event, void *param)
 static int rrm_send_report_st_hdl(void *obj, u16 event, void *param)
 {
 	struct rrm_obj *prm = (struct rrm_obj *)obj;
+	_adapter *a = obj2adp(prm);
+	struct mlme_ext_priv *pmlmeext = &a->mlmeextpriv;
+	struct mlme_ext_info *pmlmeinfo = &(pmlmeext->mlmext_info);
 	u8 val8;
 
 
 	switch (event) {
 	case FSM_EV_STATE_IN:
+		if (pmlmeinfo->state == WIFI_FW_NULL_STATE) {
+			rtw_fsm_st_goto(prm, RRM_ST_END);
+			return _SUCCESS;
+		}
 		/* we have to issue report */
 		if (prm->q.action_code == RM_ACT_RADIO_MEAS_REQ) {
 			switch (prm->q.m_type) {
@@ -4259,11 +4305,11 @@ static int rrm_deinit_priv_cb(void *priv)
 	return _SUCCESS;
 }
 
-u8 rm_add_nb_req(_adapter *padapter, struct sta_info *psta)
+u8 rm_add_nb_req(_adapter *a, struct sta_info *psta)
 {
 	struct rrm_obj *prm;
 
-	prm = rtw_rrm_new_obj(padapter, psta, 0);
+	prm = rtw_rrm_new_obj(a, psta, 0);
 
 	if (prm == NULL) {
 		RTW_ERR("rrm: unable to alloc rm obj for requeset\n");
@@ -4278,6 +4324,25 @@ u8 rm_add_nb_req(_adapter *padapter, struct sta_info *psta)
 	FSM_INFO(prm, "%s to " MAC_FMT "\n", __func__, MAC_ARG(obj2mac(prm)));
 
 	return _SUCCESS;
+}
+
+static int rrm_is_nb_valid(_adapter *a)
+{
+	struct rrm_nb_rpt *nb_rpt = &a->fsmpriv.rmpriv.nb_rpt;
+
+	if (rtw_get_passing_time_ms(nb_rpt->last_update) > RM_NB_REP_VALID_TIME)
+		return _FAIL;
+
+	return _SUCCESS;
+}
+
+int rtw_rrm_get_nb_rpt(_adapter *a, struct rrm_nb_rpt * nb_rpt)
+{
+	memcpy(nb_rpt, &a->fsmpriv.rmpriv.nb_rpt, sizeof(struct rrm_nb_rpt));
+
+	if (rrm_is_nb_valid(a))
+		return _SUCCESS; /* nb_rpt is valid */
+	return _FAIL; /* nb_rpt is invalid */
 }
 
 /* For EXTERNAL application to create RRM FSM */
@@ -4298,8 +4363,8 @@ int rtw_rrm_reg_fsm(struct fsm_priv *fsmpriv)
 	tb.deinit_priv = rrm_deinit_priv_cb;
 	tb.dump_obj = rrm_dump_obj_cb;
 	tb.dump_fsm = rrm_dump_fsm_cb;
-	tb.dbg_level = FSM_LV_TRACE;
-	tb.evt_level = FSM_LV_TRACE;
+	tb.dbg_level = FSM_LV_INFO;
+	tb.evt_level = FSM_LV_INFO;
 	tb.debug = rm_debug;
 
 	fsm = rtw_fsm_register_fsm(root, "rrm", &tb);
@@ -4310,4 +4375,151 @@ int rtw_rrm_reg_fsm(struct fsm_priv *fsmpriv)
 	return _FAIL;
 }
 #endif /* CONFIG_RTW_FSM_RRM */
+
+/* parse neighbor report */
+u32 rrm_parse_nb_list(struct rrm_nb_rpt *pnb_rpt, u8 *ie, u32 ie_len)
+{
+	int i;
+	struct nb_rpt_hdr *pie;
+	struct rrm_nb_list *pnb_list = pnb_rpt->nb_list;
+	u8 *ptr, *pend, *op, preference;
+	u32 elem_len, subelem_len, op_len;
+
+	ptr = ie;
+	pend = ie + ie_len;
+	elem_len = ie_len;
+	subelem_len = (u32)*(ie + 1);
+
+	memset(pnb_rpt, 0, sizeof(struct rrm_nb_rpt));
+	for (i = 0; i < RTW_MAX_NB_RPT_NUM; i++) {
+		if (((ptr + 7) > pend) || (elem_len < subelem_len))
+			break;
+
+		if (*ptr != RTW_WLAN_ACTION_WNM_NB_RPT_ELEM) {
+			RTW_INFO("WNM: end of data(0x%2x)!\n", *ptr);
+			break;
+		}
+
+		pie = (struct nb_rpt_hdr *)ptr;
+		_rtw_memcpy(&pnb_list[i].ent, pie, sizeof(struct nb_rpt_hdr));
+
+		op = rtw_get_ie((u8 *)(ptr + 15),
+				WNM_BTM_CAND_PREF_SUBEID, &op_len, (subelem_len - 15));
+
+		if (op && (op_len !=0)) {
+			preference = *(op + 2);
+			if (preference) /* 1-255 */
+				pnb_list[i].preference = preference;
+			else /* 0:exclude BSS */
+				pnb_list[i].preference = -1; /* exclude BSS */
+		} else {
+			pnb_list[i].preference = 0; /* Does NOT specify preference */
+		}
+		ptr = (u8 *)(ptr + subelem_len + 2);
+		elem_len -= (subelem_len + 2);
+		subelem_len = *(ptr + 1);
+
+		pnb_rpt->nb_list_num++;
+	}
+
+	return _SUCCESS;
+}
+
+static void _swap(struct rrm_nb_list *pnb_list, int idx1, int idx2)
+{
+	struct rrm_nb_list tmp;
+
+	if (idx1 == idx2)
+		return;
+
+	memcpy(&tmp, &pnb_list[idx1], sizeof(struct rrm_nb_list));
+	memcpy(&pnb_list[idx1], &pnb_list[idx2], sizeof(struct rrm_nb_list));
+	memcpy(&pnb_list[idx2], &tmp, sizeof(struct rrm_nb_list));
+}
+
+/* sort nb list according to preference */
+void rrm_sort_nb_list(struct rrm_nb_rpt *pnb_rpt)
+{
+	int i, j, p, idx1, idx2;
+
+	for (i = 0; i < pnb_rpt->nb_list_num; i++) {
+		p = pnb_rpt->nb_list[i].preference;
+		idx1 = idx2 = i;
+		for (j = i; j < pnb_rpt->nb_list_num; j++) {
+			if (pnb_rpt->nb_list[j].preference > p) {
+				p = pnb_rpt->nb_list[j].preference; /* max */
+				idx2 = j;
+			}
+		}
+		_swap(pnb_rpt->nb_list, idx1, idx2);
+	}
+}
+
+static void rrm_upd_nb_ch_list(struct rrm_obj *prm, struct rrm_nb_rpt *pnb_rpt)
+{
+	struct rtw_ieee80211_channel tmp_ch[RTW_CHANNEL_SCAN_AMOUNT] = {0};
+	const struct op_class_t *opc;
+	int i, j, tmp_ch_num = 0;
+	u8 ch, band, op_class, *pch;
+
+	for (i = 0; i < pnb_rpt->nb_list_num; i++) {
+		ch = pnb_rpt->nb_list[i].ent.ch_num;
+		op_class = pnb_rpt->nb_list[i].ent.reg_class;
+		band = rtw_get_band_by_op_class(op_class);
+
+		if (band >= BAND_MAX) {
+			FSM_WARN(prm, "%s: skip unknown opc:%d\n", __func__, op_class);
+			continue;
+		}
+
+		if (ch == 0) {
+			/* get all channels in this op class */
+			opc = get_global_op_class_by_id(op_class);
+
+			if (!opc)
+				continue;
+
+			pch = opc->len_ch_attr;
+			for (j = 0; j < pch[0]; j++) {
+				tmp_ch[tmp_ch_num].hw_value = pch[j+1];
+				tmp_ch[tmp_ch_num].band = band;
+				if (++tmp_ch_num == RTW_CHANNEL_SCAN_AMOUNT)
+					goto full;
+			}
+		} else {
+			tmp_ch[tmp_ch_num].hw_value = ch;
+			tmp_ch[tmp_ch_num].band = band;
+			if (++tmp_ch_num == RTW_CHANNEL_SCAN_AMOUNT)
+				goto full;
+		}
+	}
+
+full:
+	/* remove redundant ch */
+	for (i = 0; i < tmp_ch_num; i++) {
+		if (tmp_ch[i].hw_value != 0) {
+			for (j = i + 1; j < tmp_ch_num; j++) {
+				if (tmp_ch[i].hw_value == tmp_ch[j].hw_value &&
+					tmp_ch[i].band == tmp_ch[j].band) {
+					tmp_ch[j].hw_value = 0; /* remove */
+				}
+			}
+		}
+	}
+
+	/* copy final channels to pnb_rpt */
+	for (i = 0; i < tmp_ch_num; i++) {
+		if (tmp_ch[i].hw_value != 0) {
+			pnb_rpt->ch_list[pnb_rpt->ch_list_num].hw_value = tmp_ch[i].hw_value;
+			pnb_rpt->ch_list[pnb_rpt->ch_list_num].band = band;
+			pnb_rpt->ch_list_num++;
+		}
+	}
+#if 0
+	for (i = 0; i < pnb_rpt->ch_list_num; i++) {
+		printk("%s(%d) %d/%d ch = %d\n", __func__, __LINE__,
+			i, pnb_rpt->ch_list_num, pnb_rpt->ch_list[i].hw_value);
+	}
+#endif
+}
 

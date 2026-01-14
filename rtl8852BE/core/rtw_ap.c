@@ -4155,8 +4155,12 @@ int rtw_sta_flush(_adapter *padapter, bool enqueue)
 {
 	_list	*phead, *plist;
 	int ret = 0;
+	int stainfo_offset;
 	struct sta_info *psta = NULL;
 	struct sta_priv *pstapriv = &padapter->stapriv;
+	void *phl = GET_PHL_INFO(adapter_to_dvobj(padapter));
+	struct rtw_wifi_role_t *phl_role = padapter->phl_role;
+	struct rtw_phl_mld_t *mld = NULL;
 	u8 bc_addr[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 	u8 flush_num = 0;
 	char flush_list[NUM_STA];
@@ -4165,12 +4169,58 @@ int rtw_sta_flush(_adapter *padapter, bool enqueue)
 	if (!MLME_IS_AP(padapter) && !MLME_IS_MESH(padapter))
 		return ret;
 
+	RTW_INFO(FUNC_NDEV_FMT" auth_list, cnt:%u\n",
+		FUNC_NDEV_ARG(padapter->pnetdev), pstapriv->auth_list_cnt);
+
+	/* pick sta from sta auth_queue */
+	_rtw_spinlock_bh(&pstapriv->auth_list_lock);
+	phead = &pstapriv->auth_list;
+	plist = get_next(phead);
+	while ((rtw_end_of_queue_search(phead, plist)) == _FALSE) {
+		psta = LIST_CONTAINOR(plist, struct sta_info, auth_list);
+		plist = get_next(plist);
+
+
+		rtw_stapriv_auth_list_del(pstapriv, psta);
+
+		stainfo_offset = rtw_stainfo_offset(pstapriv, psta);
+		if (stainfo_offset_valid(stainfo_offset))
+			flush_list[flush_num++] = stainfo_offset;
+		else
+			rtw_warn_on(1);
+
+
+
+	}
+	_rtw_spinunlock_bh(&pstapriv->auth_list_lock);
+
+	for (i = 0; i < flush_num; i++) {
+		u8 sta_addr[ETH_ALEN];
+
+		psta = rtw_get_stainfo_by_offset(pstapriv, flush_list[i]);
+		if (psta != NULL) {
+			_rtw_memcpy(sta_addr, psta->phl_sta->mac_addr, ETH_ALEN);
+
+			RTW_INFO("%s() remove "MAC_FMT"\n", __func__, MAC_ARG(sta_addr));
+
+			mld = rtw_phl_get_mld_by_addr(phl, phl_role, sta_addr);
+			rtw_phl_free_mld(GET_PHL_INFO(adapter_to_dvobj(padapter)), mld);
+			rtw_free_stainfo_sw(padapter, psta);
+		}
+		#ifdef CONFIG_RTW_MESH
+		if (MLME_IS_MESH(padapter))
+			rtw_mesh_expire_peer(padapter, sta_addr);
+		#endif
+	}
+
+
+
+	flush_num = 0;
 	/* pick sta from sta asoc_queue */
 	rtw_stapriv_asoc_list_lock(pstapriv);
 	phead = &pstapriv->asoc_list;
 	plist = get_next(phead);
 	while ((rtw_end_of_queue_search(phead, plist)) == _FALSE) {
-		int stainfo_offset;
 
 		psta = LIST_CONTAINOR(plist, struct sta_info, asoc_list);
 		plist = get_next(plist);
@@ -4423,10 +4473,9 @@ void stop_ap_mode(_adapter *padapter)
 	else
 		rtw_warn_on(1);
 
+	rtw_scan_abort(padapter, 0); /* stop scanning process before ap is going to down */
+
 	pmlmepriv->update_bcn = _FALSE;
-	/*pmlmeext->bstart_bss = _FALSE;*/
-	padapter->netif_up = _FALSE;
-	/* _rtw_spinlock_free(&pmlmepriv->bcn_update_lock); */
 
 	/* reset and init security priv , this can refine with rtw_reset_securitypriv */
 	_rtw_memset((unsigned char *)&padapter->securitypriv, 0, sizeof(struct security_priv));
@@ -4615,6 +4664,11 @@ void rtw_ap_update_bss_bchbw(_adapter *adapter, struct _ADAPTER_LINK *adapter_li
 				SET_VHT_OPERATION_ELE_CHL_WIDTH(vht_op_ie + 2, CH_WIDTH_80_160M);
 				SET_VHT_OPERATION_ELE_CHL_CENTER_FREQ1(vht_op_ie + 2, center_freq);
 				SET_VHT_OPERATION_ELE_CHL_CENTER_FREQ2(vht_op_ie + 2, 0);
+			} else if (chandef->bw == CHANNEL_WIDTH_160) {
+				RTW_INFO(FUNC_ADPT_FMT" update VHT 160M, center_freq = %u\n", FUNC_ADPT_ARG(adapter), chandef->center_freq1);
+				SET_VHT_OPERATION_ELE_CHL_WIDTH(vht_op_ie + 2, CH_WIDTH_80_160M);
+				SET_VHT_OPERATION_ELE_CHL_CENTER_FREQ1(vht_op_ie + 2, chandef->center_freq1);
+				SET_VHT_OPERATION_ELE_CHL_CENTER_FREQ2(vht_op_ie + 2, chandef->center_freq2);
 			} else {
 				RTW_ERR(FUNC_ADPT_FMT" unsupported BW:%u\n", FUNC_ADPT_ARG(adapter), chandef->bw);
 				rtw_warn_on(1);

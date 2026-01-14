@@ -855,11 +855,11 @@ halbb_config_cmac_tbl_ax(struct bb_info *bb, struct rtw_phl_stainfo_t *phl_sta_i
 
 	/* BB related mask */
 	cctl_info_mask->txpwr_mode = 0x7;
-	cctl_info_mask->ntx_path_en = 0xf;
-	cctl_info_mask->path_map_a = 0x3;
-	cctl_info_mask->path_map_b = 0x3;
-	cctl_info_mask->path_map_c = 0x3;
-	cctl_info_mask->path_map_d = 0x3;
+	cctl_info_mask->ntx_path_en = 0;
+	cctl_info_mask->path_map_a = 0;
+	cctl_info_mask->path_map_b = 0;
+	cctl_info_mask->path_map_c = 0;
+	cctl_info_mask->path_map_d = 0;
 	cctl_info_mask->antsel_a = 0x1;
 	cctl_info_mask->antsel_b = 0x1;
 	cctl_info_mask->antsel_c = 0x1;
@@ -882,6 +882,9 @@ halbb_config_cmac_tbl_ax(struct bb_info *bb, struct rtw_phl_stainfo_t *phl_sta_i
 	cctrl->antsel_d = 0x0;
 	cctrl->doppler_ctrl = 0;
 	cctrl->txpwr_tolerence = 0;
+	#ifdef HALBB_PATH_DIV_SUPPORT
+	halbb_update_tx_path_div(bb, phl_sta_i);
+	#endif
 	ret = RTW_HAL_STATUS_SUCCESS;
 	BB_DBG(bb, DBG_FW_INFO, "HALBB CMAC tbl config: path = %x\n", cfg);
 	return ret;

@@ -84,6 +84,7 @@ struct _ADAPTER_LINK;
 
 #include "platform_ops.h"
 #include "rtw_scan.h"
+#include <rtw_fsm.h>
 #ifdef CONFIG_RTW_80211R
 #include <rtw_ft.h>
 #endif
@@ -173,9 +174,6 @@ struct _ADAPTER_LINK;
 #include <rtw_android.h>
 
 #include <rtw_btc.h>
-#ifdef CONFIG_RTW_FSM
-#include <rtw_fsm.h>
-#endif
 
 #define SPEC_DEV_ID_NONE BIT(0)
 #define SPEC_DEV_ID_DISABLE_HT BIT(1)
@@ -576,6 +574,7 @@ struct registry_priv {
 #ifdef CONFIG_DBCC_P2P_BG_LISTEN_SIM
 	u8 dbcc_lg_sim;
 #endif
+	u8 dis_turboedca;
 };
 
 /* For registry parameters */
@@ -819,7 +818,12 @@ struct fw_hang_info {
 struct rxff_hang_info {
 	u8 dbg_is_rxff_hang;
 	u8 rx_ff_hang_cnt;
-	/* increase when HCI Rx */
+	/* USB : Counter increments in rtw_usb_read_port_complete.
+	 *       This counter stops counting when RTW_CANNOT_RX == _TRUE
+	 * SDIO: Counter increments in sd_sync_int_hdl.
+	 *       This interrupt counter not only counts rx interrupts, but also
+	 *       stops counting when RTW_CANNOT_RUN is _TRUE
+	 */
 	u16 rx_cnt;
 	/* record in rtw_is_rxff_hang() */
 	u16 last_rx_cnt;
@@ -1043,8 +1047,9 @@ struct rf_ctl_t {
 	u8 tpc_mode;
 	u16 tpc_manual_constraint; /* mB */
 
-	bool ch_sel_within_same_band;
+	u8 ch_sel_within_same_band; /* RTW_CHSEL_BAND_XXX */
 
+	u8 edcca_mode_sel;
 	u8 edcca_mode_2g;
 #if CONFIG_IEEE80211_BAND_5GHZ
 	u8 edcca_mode_5g;
@@ -1634,6 +1639,11 @@ enum _DIS_TURBO_EDCA {
 	EN_TURBO = 0,
 	DIS_TURBO,
 	DIS_TURBO_USE_MANUAL,
+	DIS_TURBO_EDCA_NUM,
+};
+
+enum _DIS_RT_CAP {
+	DIS_MBO = 0,
 };
 
 struct _ADAPTER_LINK {
@@ -1953,6 +1963,7 @@ struct _ADAPTER {
 #endif
 	u8 dis_turboedca;/*	1: disable turboedca,
 					2. disable turboedca,and setting EDCA parameter based on the input parameter*/
+	u32 dis_rt_cap; /* runtime disable CAP for testing */
 	u32 edca_param_mode;
 	u32 last_edca;
 	u8 edca_reset;/*1:be reset 0:not reset*/

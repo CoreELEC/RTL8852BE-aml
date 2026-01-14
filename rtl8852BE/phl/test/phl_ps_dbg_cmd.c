@@ -319,7 +319,7 @@ void rtw_phl_dbg_ps_op_mode(void *phl, u8 band_idx, u8 ps_mode, u8 ps_op_mode)
 	return;
 
 cmd_fail:
-	_os_mem_free(phl_to_drvpriv(phl_info), dbg_info, sizeof(dbg_info));
+	_os_mem_free(phl_to_drvpriv(phl_info), dbg_info, sizeof(struct ps_mdl_dbg_info));
 }
 
 void phl_ps_dbg_ps_op_mode(struct phl_info_t *phl_info, u32 *used,
@@ -388,7 +388,7 @@ void rtw_phl_dbg_ps_cap(void *phl, u8 band_idx, u8 ps_mode, u8 ps_cap)
 	return;
 
 cmd_fail:
-	_os_mem_free(phl_to_drvpriv(phl_info), dbg_info, sizeof(dbg_info));
+	_os_mem_free(phl_to_drvpriv(phl_info), dbg_info, sizeof(struct ps_mdl_dbg_info));
 }
 
 void phl_ps_dbg_ps_cap(struct phl_info_t *phl_info, u32 *used,

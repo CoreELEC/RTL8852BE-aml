@@ -493,6 +493,10 @@ void phl_test_mp_cmd_process(void *mp, void *buf, u32 buf_len, u8 submdid)
 	if(mp_ctx->status == MP_STATUS_WAIT_CMD) {
 		mp_ctx->buf_len = buf_len;
 		mp_ctx->buf = _os_kmem_alloc(phl_com->drv_priv, buf_len);
+		if (mp_ctx->buf == NULL) {
+			PHL_WARN("%s: Allocate mp_ctx->buf fail!\n", __func__);
+			return;
+		}
 		_os_mem_cpy(phl_com->drv_priv, mp_ctx->buf, buf, buf_len);
 		_os_mem_set(phl_com->drv_priv, &bp_info, 0, sizeof(struct test_bp_info));
 		bp_info.type = BP_INFO_TYPE_MP_CMD_EVENT;

@@ -135,21 +135,13 @@ struct	stainfo_stats	{
 	u64	rx_bytes;
 	u64	rx_bc_bytes;
 	u64	rx_mc_bytes;
-	u64	last_rx_bytes;
-	u64 last_rx_bc_bytes;
-	u64 last_rx_mc_bytes;
 	u64	rx_drops; /* TBD */
-	u32 rx_tp_kbits;
-	u32 smooth_rx_tp_kbits;
 
 	u64	tx_pkts;
 	u64	last_tx_pkts;
 
 	u64	tx_bytes;
-	u64	last_tx_bytes;
 	u64 tx_drops; /* TBD */
-	u32 tx_tp_kbits;
-	u32 smooth_tx_tp_kbits;
 
 	/* unicast only */
 	u64 last_rx_data_uc_pkts; /* For Read & Clear requirement in proc_get_rx_stat() */
@@ -852,6 +844,7 @@ void rtw_stapriv_asoc_list_lock(struct sta_priv *stapriv);
 void rtw_stapriv_asoc_list_unlock(struct sta_priv *stapriv);
 void rtw_stapriv_asoc_list_add(struct sta_priv *stapriv, struct sta_info *sta);
 void rtw_stapriv_asoc_list_del(struct sta_priv *stapriv, struct sta_info *sta);
+void rtw_stapriv_auth_list_del(struct sta_priv *stapriv, struct sta_info *sta);
 #endif
 
 #if CONFIG_RTW_MACADDR_ACL

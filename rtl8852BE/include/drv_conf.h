@@ -24,7 +24,7 @@
 
 /*
  * RTW_BUSY_DENY_SCAN control if scan would be denied by busy traffic.
- * When this defined, BUSY_TRAFFIC_SCAN_DENY_PERIOD would be used to judge if 
+ * When this defined, BUSY_TRAFFIC_SCAN_DENY_PERIOD would be used to judge if
  * scan request coming from scan UI. Scan request from scan UI would be
  * exception and never be denied by busy traffic.
  */
@@ -48,22 +48,22 @@
 
 #endif
 
-#if (defined(__ANDROID_COMMON_KERNEL__) && !defined(CONFIG_RTW_ANDROID))
-	#error "Set CONFIG_RTW_ANDROID in Makefile while build with Android Common Kernel!!"
-#endif
-
 #ifdef CONFIG_RTW_ANDROID
 
 	#include <linux/version.h>
 
+	#ifndef __ANDROID_COMMON_KERNEL__
+	#define __ANDROID_COMMON_KERNEL__
+	#endif
+
 	#ifndef CONFIG_PLATFORM_ANDROID
 	#define CONFIG_PLATFORM_ANDROID
 	#endif
-	
+
 	#ifndef CONFIG_IOCTL_CFG80211
 	#define CONFIG_IOCTL_CFG80211
 	#endif
-	
+
 	#ifndef RTW_USE_CFG80211_STA_EVENT
 	#define RTW_USE_CFG80211_STA_EVENT
 	#endif
@@ -197,6 +197,10 @@
 	#endif
 #endif
 
+#ifndef CONFIG_RTW_DIS_TURBOEDCA
+#define CONFIG_RTW_DIS_TURBOEDCA 0 /* 0: enable, 1:disable */
+#endif
+
 #ifndef CONFIG_RTW_DATA_BMC_TO_UC
 #define CONFIG_RTW_DATA_BMC_TO_UC 0
 #endif
@@ -301,7 +305,7 @@
 #endif
 
 #ifndef CONFIG_RTW_EDCCA_MODE_SEL
-#define CONFIG_RTW_EDCCA_MODE_SEL 0 /* 0:RTW_EDCCA_NORM, 0xFF:RTW_EDCCA_AUTO */
+#define CONFIG_RTW_EDCCA_MODE_SEL 0 /* 0:RTW_EDCCA_NORM, 255:RTW_EDCCA_AUTO */
 #endif
 
 #ifndef CONFIG_RTW_ADAPTIVITY_EN
@@ -489,7 +493,7 @@
 	#define NR_TBTX_SLOT			4
 	#define NR_MAXSTA_INSLOT		5
 	#define TBTX_TX_DURATION		30
-	
+
 	#define MAX_TXPAUSE_DURATION	(TBTX_TX_DURATION*NR_TBTX_SLOT)
 #endif
 
@@ -664,6 +668,12 @@ power down etc.) in last time, we can unmark this flag to avoid some unpredictab
 #endif /* CONFIG_RTW_LPS */
 
 #ifdef CONFIG_WOWLAN
+
+#ifndef CONFIG_APF_VERSION
+#undef CONFIG_APF
+#undef CONFIG_APF_DBG
+#endif /* CONFIG_APF_VERSION */
+
 #ifdef CONFIG_RTW_IPS_WOW
 #ifdef RTW_WOW_IPS_MODE
 	#if (RTW_WOW_IPS_MODE > 4 || RTW_WOW_IPS_MODE < 0 || RTW_WOW_IPS_MODE == 1)
@@ -706,14 +716,15 @@ power down etc.) in last time, we can unmark this flag to avoid some unpredictab
 
 #ifdef CONFIG_PCI_BCN_POLLING
 #define CONFIG_BCN_ICF
-#endif 
+#endif
 
 #if !defined (CONFIG_PCI_MSI) || defined (CONFIG_RTW_FORCE_PCI_MSI_DISABLE)
 #define CONFIG_RTW_PCI_MSI_DISABLE
 #endif
 
-#if 0
 /* Debug related compiler flags */
+#define RTW_DETECT_HANG
+#if 0
 #define DBG_THREAD_PID	/* Add thread pid to debug message prefix */
 #define DBG_CPU_INFO	/* Add CPU info to debug message prefix */
 #endif

@@ -367,19 +367,9 @@ static irqreturn_t rtw_pci_interrupt(int irq, void *priv, struct pt_regs *regs)
 	struct dvobj_priv *dvobj = (struct dvobj_priv *)priv;
 	PPCI_DATA pci_data = dvobj_to_pci(dvobj);
 	enum rtw_phl_status pstatus =  RTW_PHL_STATUS_SUCCESS;
-	unsigned long sp_flags;
-	/*_adapter *padapter = dvobj_get_primary_adapter(dvobj);*/
 
-	/*padapter->int_logs.all++;*/
-	_rtw_spinlock_irq(&dvobj->phl_com->imr_lock, &sp_flags);
-	if (rtw_phl_recognize_interrupt(dvobj->phl)) {
-		/*padapter->int_logs.known++;*/
-		pstatus = rtw_phl_interrupt_handler(dvobj->phl);
-	}
-	_rtw_spinunlock_irq(&dvobj->phl_com->imr_lock, &sp_flags);
-
+	pstatus = rtw_phl_interrupt_request_handler(dvobj->phl);
 	if (pstatus == RTW_PHL_STATUS_FAILURE) {
-		/*padapter->int_logs.err++;*/
 		return IRQ_HANDLED;
 	}
 	/* return IRQ_NONE; */
@@ -702,7 +692,7 @@ exit:
 
 }
 
-static int rtw_resume_process(_adapter *padapter)
+int rtw_resume_process(_adapter *padapter)
 {
 	return rtw_resume_common(padapter);
 }
@@ -823,7 +813,7 @@ static void rtw_pci_primary_adapter_deinit(_adapter *padapter)
 }
 
 #ifdef CONFIG_PLATFORM_AML_S905
-extern struct device *get_pcie_reserved_mem_dev(void);
+//extern struct device *get_pcie_reserved_mem_dev(void);
 struct device * g_pcie_reserved_mem_dev;
 #endif
 
@@ -1004,10 +994,6 @@ static void rtw_dev_remove(struct pci_dev *pdev)
 		dev_set_surprise_removed(dvobj);
 	}
 
-#ifdef RTW_WKARD_PCI_DEVRM_DIS_INT
-	rtw_phl_disable_interrupt(GET_PHL_INFO(dvobj));
-#endif
-
 #ifdef CONFIG_CSI_TIMER_POLLING
 	rtw_csi_poll_timer_cancel(dvobj);
 #endif
@@ -1061,9 +1047,9 @@ static int __init rtw_drv_entry(void)
 
 #ifdef CONFIG_PLATFORM_AML_S905
 #ifdef USE_AML_PCIE_TEE_MEM
-	g_pcie_reserved_mem_dev = get_pcie_reserved_mem_dev();
-	if (g_pcie_reserved_mem_dev)
-		RTW_PRINT("#######use amlogic pcie TEE protect mem#######\n");
+	//g_pcie_reserved_mem_dev = get_pcie_reserved_mem_dev();
+	//if (g_pcie_reserved_mem_dev)
+	//	RTW_PRINT("#######use amlogic pcie TEE protect mem#######\n");
 #endif
 #endif
 

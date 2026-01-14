@@ -155,35 +155,15 @@ typedef enum _HAL_DEF_VARIABLE {
 	HAL_DEF_BEAMFORMER_CAP,
 	HAL_DEF_BEAMFORMEE_CAP,
 	HW_VAR_MAX_RX_AMPDU_FACTOR,
-	HW_DEF_RA_INFO_DUMP,
 	HAL_DEF_DBG_DUMP_TXPKT,
 	HAL_DEF_TX_PAGE_SIZE,
 	HW_VAR_BEST_AMPDU_DENSITY,
 } HAL_DEF_VARIABLE;
 
-static inline u8 rtw_hal_set_def_var(_adapter *padapter, HAL_DEF_VARIABLE def_var, void *val)
-{
-	return 0;
-}
 
 u8 rtw_hal_get_def_var(struct _ADAPTER *a, struct _ADAPTER_LINK *alink,
 				enum _HAL_DEF_VARIABLE def_var, void *val);
 
-#if 0
-static inline void rtw_hal_sec_read_cam_ent(_adapter *adapter, u8 id, u8 *ctrl, u8 *mac, u8 *key)
-{}
-static inline void rtw_hal_sec_write_cam_ent(_adapter *adapter, u8 id, u16 ctrl, u8 *mac, u8 *key)
-{}
-static inline void rtw_hal_sec_clr_cam_ent(_adapter *adapter, u8 id)
-{}
-static inline bool rtw_hal_sec_read_cam_is_gk(_adapter *adapter, u8 id)
-{
-	return _TRUE;
-}
-#endif
-
-static inline void rtw_hal_linked_info_dump(_adapter *padapter, u8 benable)
-{}
 
 static inline bool rtw_hal_get_phy_edcca_flag(_adapter *adapter)
 {

@@ -141,6 +141,7 @@ phl_sw_cap_init(struct rtw_phl_com_t* phl_com)
 #endif
 
 	phl_com->dev_sw_cap.disable_dyn_txpwr = false;
+	phl_com->dev_sw_cap.tx_ring_tid_rr = false;
 	return RTW_PHL_STATUS_SUCCESS;
 }
 

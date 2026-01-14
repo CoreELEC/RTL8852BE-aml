@@ -402,6 +402,15 @@ _phl_cmd_general_post_phase_msg_hdlr(struct phl_info_t *phl_info, void *dispr,
 		psts = phl_cmd_tpe_update_hdl(phl_info, phl_cmd->buf);
 	break;
 
+	case MSG_EVT_DBG_HAL_PROC_CMD:
+		psts = phl_cmd_hal_proc_cmd_hdl(phl_info, phl_cmd->buf);
+		break;
+
+	case MSG_EVT_DBG_READ_RFREG:
+		phl_cmd_read_rfreg_hdl(phl_info, phl_cmd->buf);
+		psts = RTW_PHL_STATUS_SUCCESS;
+		break;
+
 #ifdef CONFIG_PHL_TWT
 	case MSG_EVT_TWT_STA_ACCEPT:
 		psts = phl_twt_accept_for_sta_mode(phl_info, phl_cmd->buf);
@@ -496,6 +505,12 @@ _phl_cmd_general_post_phase_msg_hdlr(struct phl_info_t *phl_info, void *dispr,
 	case MSG_EVT_DISCONNECT_CMD_DBCC_EN:
 		psts = phl_cmd_dbcc_en_hdl(phl_info, phl_cmd->buf);
 	break;
+#endif
+
+#ifdef CONFIG_PHL_APF
+	case MSG_EVT_APF_CTRL:
+		psts = rtw_phl_manipulate_apf(phl_info, phl_cmd->buf);
+		break;
 #endif
 
 	default:

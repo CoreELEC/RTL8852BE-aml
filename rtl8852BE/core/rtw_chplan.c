@@ -799,10 +799,9 @@ static void rtw_edcca_mode_update_by_regd_reqs(struct dvobj_priv *dvobj, bool re
 
 void rtw_edcca_mode_update(struct dvobj_priv *dvobj, bool req_lock)
 {
-	struct registry_priv *regsty = dvobj_to_regsty(dvobj);
 	struct rf_ctl_t *rfctl = dvobj_to_rfctl(dvobj);
 
-	if (regsty->edcca_mode_sel == RTW_EDCCA_NORM) {
+	if (rfctl->edcca_mode_sel == RTW_EDCCA_NORM) {
 		/* force disable */
 		rfctl->edcca_mode_2g = RTW_EDCCA_NORM;
 		#if CONFIG_IEEE80211_BAND_5GHZ
@@ -812,7 +811,7 @@ void rtw_edcca_mode_update(struct dvobj_priv *dvobj, bool req_lock)
 		rfctl->edcca_mode_6g = RTW_EDCCA_NORM;
 		#endif
 
-	} else if (regsty->edcca_mode_sel == RTW_EDCCA_CS) {
+	} else if (rfctl->edcca_mode_sel == RTW_EDCCA_CS) {
 		/* carrier sense */
 		rfctl->edcca_mode_2g = RTW_EDCCA_CS;
 		#if CONFIG_IEEE80211_BAND_5GHZ
@@ -822,7 +821,7 @@ void rtw_edcca_mode_update(struct dvobj_priv *dvobj, bool req_lock)
 		rfctl->edcca_mode_6g = RTW_EDCCA_CS;
 		#endif
 
-	} else if (regsty->edcca_mode_sel == RTW_EDCCA_ADAPT) {
+	} else if (rfctl->edcca_mode_sel == RTW_EDCCA_ADAPT) {
 		/* adaptivity */
 		rfctl->edcca_mode_2g = RTW_EDCCA_ADAPT;
 		#if CONFIG_IEEE80211_BAND_5GHZ
@@ -832,7 +831,7 @@ void rtw_edcca_mode_update(struct dvobj_priv *dvobj, bool req_lock)
 		rfctl->edcca_mode_6g = RTW_EDCCA_ADAPT;
 		#endif
 
-	} else if (regsty->edcca_mode_sel == RTW_EDCCA_CBP) {
+	} else if (rfctl->edcca_mode_sel == RTW_EDCCA_CBP) {
 		/* adaptivity */
 		rfctl->edcca_mode_2g = RTW_EDCCA_NORM;
 		#if CONFIG_IEEE80211_BAND_5GHZ
@@ -869,6 +868,13 @@ u8 rtw_get_edcca_mode(struct dvobj_priv *dvobj, enum band_type band)
 	return edcca_mode;
 }
 
+void rtw_edcca_mode_sel_msg(void *sel, struct dvobj_priv *dvobj)
+{
+	struct rf_ctl_t *rfctl = dvobj_to_rfctl(dvobj);
+
+	RTW_PRINT_SEL(sel, "RTW_EDCCA_%s\n", rtw_edcca_mode_sel_str(rfctl->edcca_mode_sel));
+}
+
 #if CONFIG_TXPWR_LIMIT
 char *rtw_get_txpwr_lmt_name_of_bands_str(char *buf, const char *name_of_band[], u8 unknown_bmp)
 {
@@ -885,7 +891,6 @@ char *rtw_get_txpwr_lmt_name_of_bands_str(char *buf, const char *name_of_band[],
 #define BOOL_S_DIFF (-2)
 #define BOOL_S_SEQ_COMPARE(result, operand) ( \
 	(result) == BOOL_S_NONE ? BOOL_TO_S8(operand) : \
-	BOOL_TO_S8(operand) == BOOL_S_NONE ? (result) : \
 	(result) != BOOL_TO_S8(operand) ? BOOL_S_DIFF : (result) \
 	)
 
@@ -1964,7 +1969,7 @@ void rtw_regd_watchdog_hdl(struct dvobj_priv *dvobj)
 #endif
 }
 
-static enum channel_width rtw_regd_adjust_linking_bw(struct rf_ctl_t *rfctl
+static enum channel_width rtw_regd_adjust_op_bw(struct rf_ctl_t *rfctl, bool slave_m
 	, enum band_type band, u8 ch, enum channel_width bw, enum chan_offset offset)
 {
 #ifndef DBG_REGD_ADJUST_LINKING_BW
@@ -1989,7 +1994,9 @@ static enum channel_width rtw_regd_adjust_linking_bw(struct rf_ctl_t *rfctl
 			continue;
 		}
 
-		if (!rtw_chset_is_bchbw_valid(chset, band, ch, bw, offset, true, true)) {
+		/* TODO: slave_m downgrade bw to avoid not covered by master of STA link */
+
+		if (!rtw_chset_is_bchbw_valid(chset, band, ch, bw, offset, !slave_m , !slave_m)) {
 			#if DBG_REGD_ADJUST_LINKING_BW
 			RTW_INFO("%s %s ch:%u,%u,%u not allowed by chset\n", __func__, band_str(band), ch, bw, offset);
 			#endif
@@ -2015,7 +2022,7 @@ enum channel_width alink_adjust_linking_bw_by_regd(struct _ADAPTER_LINK *alink
 	_adapter *adapter = alink->adapter;
 	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
 
-	return rtw_regd_adjust_linking_bw(rfctl, band, ch, bw, offset);
+	return rtw_regd_adjust_op_bw(rfctl, false, band, ch, bw, offset);
 }
 
 enum channel_width adapter_adjust_linking_bw_by_regd(_adapter *adapter
@@ -2023,8 +2030,27 @@ enum channel_width adapter_adjust_linking_bw_by_regd(_adapter *adapter
 {
 	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
 
-	return rtw_regd_adjust_linking_bw(rfctl, band, ch, bw, offset);
+	return rtw_regd_adjust_op_bw(rfctl, false, band, ch, bw, offset);
 }
+
+#ifdef CONFIG_AP_MODE
+enum channel_width alink_adjust_slave_m_bw_by_regd(struct _ADAPTER_LINK *alink
+	, enum band_type band, u8 ch, enum channel_width bw, enum chan_offset offset)
+{
+	_adapter *adapter = alink->adapter;
+	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
+
+	return rtw_regd_adjust_op_bw(rfctl, true, band, ch, bw, offset);
+}
+
+enum channel_width adapter_adjust_slave_m_bw_by_regd(_adapter *adapter
+	, enum band_type band, u8 ch, enum channel_width bw, enum chan_offset offset)
+{
+	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
+
+	return rtw_regd_adjust_op_bw(rfctl, true, band, ch, bw, offset);
+}
+#endif
 
 static void rtw_chplan_rtk_priv_domain_code_get_country_chplan(struct country_chplan *chplan
 	, u8 domain_code, u8 domain_code_6g)
@@ -2583,6 +2609,22 @@ static void rtw_chplan_rtk_priv_req_prehdl_confs(struct rf_ctl_t *rfctl, struct 
 			RTW_INFO("%s set bcn_hint_valid_ms to %u\n", caller, confs->bcn_hint_valid_ms);
 		}
 		confs->set_types &= ~BIT(CHPLAN_CONFS_BCN_HINT_VALID_MS); /* setting done here */
+	}
+
+	if (confs->set_types & BIT(CHPLAN_CONFS_EDCCA_MODE_SEL)) {
+		if (RTW_EDCCA_MODE_SEL_VALID(confs->edcca_mode_sel)
+			&& rfctl->edcca_mode_sel != confs->edcca_mode_sel
+		) {
+			rfctl->edcca_mode_sel = confs->edcca_mode_sel;
+			RTW_INFO("%s set edcca_mode_sel to %s\n", caller
+				, rtw_edcca_mode_sel_str(confs->edcca_mode_sel));
+			if (rfctl->edcca_mode_sel != RTW_EDCCA_AUTO) {
+				/* force edcca mode, not rely on regd reqs, update here */
+				rtw_edcca_mode_update(rfctl_to_dvobj(rfctl), false);
+				confs->set_types &= ~BIT(CHPLAN_CONFS_EDCCA_MODE_SEL); /* setting done here */
+			}
+		} else
+			confs->set_types &= ~BIT(CHPLAN_CONFS_EDCCA_MODE_SEL); /* setting done here */
 	}
 
 #ifdef CONFIG_80211D
@@ -3690,6 +3732,7 @@ static const char *const chplan_confs_type_str[] = {
 	[CHPLAN_CONFS_INIT_REGD_ALWAYS_APPLY]	= "init_regd_always_apply",
 	[CHPLAN_CONFS_USER_REGD_ALWAYS_APPLY]	= "user_regd_always_apply",
 	[CHPLAN_CONFS_BCN_HINT_VALID_MS]	= "bcn_hint_valid_ms",
+	[CHPLAN_CONFS_EDCCA_MODE_SEL]		= "edcca_mode_sel",
 	[CHPLAN_CONFS_CIS_EN_MODE]		= "cis_en_mode",
 	[CHPLAN_CONFS_CIS_FLAGS]		= "cis_flags",
 	[CHPLAN_CONFS_CIS_EN_IFBMP]		= "cis_en_ifbmp",
@@ -3776,6 +3819,16 @@ static void rtw_parse_chplan_confs_type_arg_str(struct chplan_confs *confs, enum
 			if (sscanf(str, "%u", &ms) == 1) {
 				confs->set_types |= BIT(type);
 				confs->bcn_hint_valid_ms = ms;
+			}
+		}
+
+	} else if (type == CHPLAN_CONFS_EDCCA_MODE_SEL) {
+		if (strlen(str)) {
+			u8 mode;
+
+			if (sscanf(str, "%hhu", &mode) == 1) {
+				confs->set_types |= BIT(type);
+				confs->edcca_mode_sel = mode;
 			}
 		}
 
@@ -4029,6 +4082,7 @@ u8 rtw_get_chplan_hdl(_adapter *adapter, u8 *pbuf)
 	chplan->confs.init_regd_always_apply = rfctl->init_regd_always_apply;
 	chplan->confs.user_regd_always_apply = rfctl->user_regd_always_apply;
 	chplan->confs.bcn_hint_valid_ms = rfctl->bcn_hint_valid_ms;
+	chplan->confs.edcca_mode_sel = rfctl->edcca_mode_sel;
 #ifdef CONFIG_80211D
 	chplan->confs.cis_en_mode = rfctl->cis_en_mode;
 	chplan->confs.cis_flags = rfctl->cis_flags;
@@ -4557,6 +4611,7 @@ void dump_cur_chplan_confs(void *sel, struct rf_ctl_t *rfctl)
 	RTW_PRINT_SEL(sel, "init_regd_always_apply=%d\n", confs->init_regd_always_apply);
 	RTW_PRINT_SEL(sel, "user_regd_always_apply=%d\n", confs->user_regd_always_apply);
 	RTW_PRINT_SEL(sel, "bcn_hint_valid_ms=%u\n", confs->bcn_hint_valid_ms);
+	RTW_PRINT_SEL(sel, "edcca_mode_sel=%u\n", confs->edcca_mode_sel);
 #ifdef CONFIG_80211D
 	RTW_PRINT_SEL(sel, "cis_en_mode=%u\n", confs->cis_en_mode);
 	RTW_PRINT_SEL(sel, "cis_flags=0x%02x\n", confs->cis_flags);

@@ -1562,6 +1562,12 @@ void rtw_stapriv_asoc_list_del(struct sta_priv *stapriv, struct sta_info *sta)
 #endif
 	STA_SET_MESH_PLINK(sta, NULL);
 }
+
+void rtw_stapriv_auth_list_del(struct sta_priv *stapriv, struct sta_info *sta)
+{
+	rtw_list_delete(&sta->auth_list);
+	stapriv->auth_list_cnt--;
+}
 #endif /* CONFIG_AP_MODE */
 
 #if CONFIG_RTW_MACADDR_ACL

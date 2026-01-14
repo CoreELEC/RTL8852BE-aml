@@ -221,11 +221,7 @@ _ps_ps_cfg_int(struct phl_info_t *phl_info, u8 ps_mode, enum phl_ps_ps_int_cfg_s
 		 * 1. disable imr
 		 * 2. stop datapath
 		 */
-		#ifdef CONFIG_SYNC_INTERRUPT
-		evt_ops->set_interrupt_caps(phlcom_to_drvpriv(phl_info->phl_com), false);
-		#else
-		rtw_hal_disable_interrupt(phl_info->phl_com, phl_info->hal);
-		#endif /* CONFIG_SYNC_INTERRUPT */
+		rtw_phl_disable_interrupt_sync(phl_info->phl_com);
 
 		_phl_ps_ctrl_datapath(phl_info, true);
 		break;
@@ -239,22 +235,14 @@ _ps_ps_cfg_int(struct phl_info_t *phl_info, u8 ps_mode, enum phl_ps_ps_int_cfg_s
 
 		_phl_ps_ctrl_datapath(phl_info, false);
 
-		#ifdef CONFIG_SYNC_INTERRUPT
-		evt_ops->set_interrupt_caps(phlcom_to_drvpriv(phl_info->phl_com), true);
-		#else
-		rtw_hal_enable_interrupt(phl_info->phl_com, phl_info->hal);
-		#endif /* CONFIG_SYNC_INTERRUPT */
+		rtw_phl_enable_interrupt_sync(phl_info->phl_com);
 		break;
 	case PS_LEAVE_CFG_INT_PRE_PHASE:
 		/**
 		 * 1. disable imr
 		 * 2. stop datapath
 		 */
-		#ifdef CONFIG_SYNC_INTERRUPT
-		evt_ops->set_interrupt_caps(phlcom_to_drvpriv(phl_info->phl_com), false);
-		#else
-		rtw_hal_disable_interrupt(phl_info->phl_com, phl_info->hal);
-		#endif /* CONFIG_SYNC_INTERRUPT */
+		rtw_phl_disable_interrupt_sync(phl_info->phl_com);
 
 		_phl_ps_ctrl_datapath(phl_info, true);
 		break;
@@ -268,11 +256,7 @@ _ps_ps_cfg_int(struct phl_info_t *phl_info, u8 ps_mode, enum phl_ps_ps_int_cfg_s
 
 		_phl_ps_ctrl_datapath(phl_info, false);
 
-		#ifdef CONFIG_SYNC_INTERRUPT
-		evt_ops->set_interrupt_caps(phlcom_to_drvpriv(phl_info->phl_com), true);
-		#else
-		rtw_hal_enable_interrupt(phl_info->phl_com, phl_info->hal);
-		#endif /* CONFIG_SYNC_INTERRUPT */
+		rtw_phl_enable_interrupt_sync(phl_info->phl_com);
 		break;
 	default:
 		PHL_ERR("%s(): unknown step!\n", __func__);
@@ -322,7 +306,7 @@ phl_ps_cfg_pwr_lvl(struct phl_info_t *phl_info, u8 ps_mode, u8 cur_pwr_lvl, u8 r
 	hstatus = rtw_hal_ps_pwr_lvl_cfg(phl_info->phl_com, phl_info->hal,
 				req_pwr_lvl);
 
-	if (cur_pwr_lvl == PS_PWR_LVL_PWR_GATED)
+	if (cur_pwr_lvl == PS_PWR_LVL_PWR_GATED && hstatus == RTW_HAL_STATUS_SUCCESS)
 		hstatus = rtw_hal_pg_redownload_fw(phl_info->phl_com, phl_info->hal);
 
 	_ps_ps_cfg_int(phl_info, ps_mode, _judge_ps_cfg_int_step(cur_pwr_lvl, req_pwr_lvl, false));
@@ -458,6 +442,8 @@ phl_ps_lps_cfg(struct phl_info_t *phl_info, struct ps_cfg *cfg, u8 en)
 		wrole = sta->wrole;
 	} else {
 		PHL_TRACE(COMP_PHL_PS, _PHL_WARNING_, "[PS], %s(): cannot get sta!\n", __func__);
+		status = RTW_PHL_STATUS_FAILURE;
+		return status;
 	}
 
 	if (cfg->wow == false) {
@@ -533,7 +519,7 @@ static enum rtw_phl_status _lps_enter_proto_cfg(struct phl_info_t *phl_info, str
 			MAC_ADDRESS_LENGTH);
 #ifdef CONFIG_PHL_PKTOFLD
 	status = rtw_phl_pkt_ofld_request(phl_info, cfg->macid,
-				PKT_TYPE_NULL_DATA, cfg->token, &null_info, __func__);
+				PKT_TYPE_NULL_DATA, cfg->token, &null_info, __func__, 0);
 	if (status != RTW_PHL_STATUS_SUCCESS) {
 		PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS], %s(): add null pkt ofld fail!\n", __func__);
 		return status;
@@ -561,7 +547,7 @@ static enum rtw_phl_status _lps_leave_proto_cfg(struct phl_info_t *phl_info, str
 	}
 #ifdef CONFIG_PHL_PKTOFLD
 	status = rtw_phl_pkt_ofld_cancel(phl_info, cfg->macid,
-					PKT_TYPE_NULL_DATA, cfg->token);
+					PKT_TYPE_NULL_DATA, cfg->token, 0);
 	if (status != RTW_PHL_STATUS_SUCCESS) {
 		PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS], %s(): del null pkt ofld fail!\n", __func__);
 		return status;

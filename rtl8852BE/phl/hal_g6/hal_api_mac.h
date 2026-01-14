@@ -285,6 +285,16 @@ enum rtw_hal_status
 rtw_hal_mac_wow_req_tri_evt(struct hal_info_t *hal);
 enum rtw_hal_status
 rtw_hal_mac_wow_req_diag_rpt(struct hal_info_t *hal);
+
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+enum rtw_hal_status
+rtw_hal_mac_cfg_mdns_ofld(struct hal_info_t *hal_info, u16 macid, u8 en,
+			  struct rtw_mdns_ofld_info *cfg);
+#endif
+#ifdef CONFIG_PHL_APF
+enum rtw_hal_status
+rtw_hal_mac_ctrl_apf(struct hal_info_t *hal_info, struct phl_apf_info *info);
+#endif
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_PHL_SCANOFLD
@@ -662,11 +672,11 @@ rtw_hal_mac_lps_bcn_tracking_cfg(struct hal_info_t *hal,
 enum rtw_hal_status
 rtw_hal_mac_tbtt_tuning_cfg(struct hal_info_t *hal, enum phl_band_idx band,
 				u8 port, u32 tbtt);
-
+#ifdef CONFIG_PHL_BEAMFORM
 enum rtw_hal_status
 hal_mac_ax_send_fw_snd(struct hal_info_t *hal_info,
 		       struct hal_ax_fwcmd_snd *hal_cmd);
-
+#endif
 enum rtw_hal_status
 rtw_hal_mac_tx_mode_sel(struct hal_info_t *hal_info, u8 fw_tx, u8 txop_wmm_en_bm);
 enum rtw_hal_status

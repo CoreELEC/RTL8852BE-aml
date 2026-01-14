@@ -294,6 +294,7 @@ _phl_snd_cmd_bfer_cmd_proc(struct phl_info_t *phl, struct snd_cmd_bfer *snd_cmd)
 		pstatus = phl_snd_func_grouping(phl, snd_cmd->wrole->id);
 		if (RTW_PHL_STATUS_SUCCESS != pstatus) {
 			mstatus = MDL_RET_FAIL;
+			break;
 		}
 		mstatus = MDL_RET_SUCCESS;
 	}
@@ -667,6 +668,11 @@ rtw_phl_snd_cmd_set_vht_gid(void *phl,
 	msg.band_idx = wrole->rlink[RTW_RLINK_PRIMARY].hw_band;
 
 	gid_tbl = (struct rtw_phl_gid_pos_tbl *)_os_kmem_alloc(d, sizeof(*gid_tbl));
+	if (gid_tbl == NULL) {
+		PHL_TRACE(COMP_PHL_DBG, _PHL_ERR_, "%s: gid_tbl allocate fail !\n",
+			  __func__);
+		goto exit;
+	}
 	_os_mem_cpy(d, gid_tbl, tbl, sizeof(struct rtw_phl_gid_pos_tbl));
 
 	msg.inbuf = (u8 *)gid_tbl;
@@ -682,8 +688,10 @@ rtw_phl_snd_cmd_set_vht_gid(void *phl,
 	return phl_status;
 
 exit:
-	_os_kmem_free(d, gid_tbl,
-		      sizeof(struct rtw_phl_gid_pos_tbl));
+	if (gid_tbl != NULL) {
+		_os_kmem_free(d, gid_tbl,
+			      sizeof(struct rtw_phl_gid_pos_tbl));
+	}
 	/* release cmd_disp_eng control */
 	_phl_snd_free_eng(phl_info, SND_CMD_DISP_CTRL_BFEE);
 	return phl_status;
@@ -742,6 +750,11 @@ rtw_phl_snd_cmd_set_aid(void *phl,
 	attr.completion.priv = phl_info;
 
 	cmdbuf = (struct snd_cmd_set_aid *)_os_kmem_alloc(d, sizeof(struct snd_cmd_set_aid));
+	if (cmdbuf == NULL) {
+		PHL_TRACE(COMP_PHL_DBG, _PHL_ERR_, "%s: cmdbuf allocate fail!\n",
+			  __func__);
+		goto exit;
+	}
 	cmdbuf->aid = aid;
 	cmdbuf->sta_info = sta;
 
@@ -759,7 +772,9 @@ rtw_phl_snd_cmd_set_aid(void *phl,
 	return phl_status;
 
 exit:
-	_os_kmem_free(d, cmdbuf, sizeof(struct snd_cmd_set_aid));
+	if (cmdbuf != NULL) {
+		_os_kmem_free(d, cmdbuf, sizeof(struct snd_cmd_set_aid));
+	}
 	/* release cmd_disp_eng control */
 	_phl_snd_free_eng(phl_info, SND_CMD_DISP_CTRL_BFEE);
 	return phl_status;

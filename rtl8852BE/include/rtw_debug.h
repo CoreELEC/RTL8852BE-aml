@@ -418,6 +418,8 @@ u16 rtw_ap_linking_test_force_auth_fail(void);
 u16 rtw_ap_linking_test_force_asoc_fail(void);
 #endif
 
+const char *rtw_data_rate_str(u16 rate);
+
 #ifdef CONFIG_PROC_DEBUG
 ssize_t proc_set_write_reg(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
 int proc_get_read_reg(struct seq_file *m, void *v);
@@ -627,11 +629,35 @@ ssize_t proc_set_wow_gpio_duration(struct file *file, const char __user *buffer,
 		size_t count, loff_t *pos, void *data);
 int proc_get_wow_gpio_duration(struct seq_file *m, void *v);
 #endif /*CONFIG_GPIO_WAKEUP*/
+#ifdef CONFIG_MDNS_OFFLOAD
+ssize_t proc_set_wow_mdns_resp(struct file *file, const char __user *buffer,
+		size_t count, loff_t *pos, void *data);
+int proc_get_wow_mdns_resp(struct seq_file *m, void *v);
+ssize_t proc_set_wow_mdns_match_criteria(struct file *file,
+		const char __user *buffer, size_t count, loff_t *pos, void *data);
+int proc_get_wow_mdns_match_criteria(struct seq_file *m, void *v);
+ssize_t proc_set_wow_mdns_passthru_list(struct file *file,
+		const char __user *buffer, size_t count, loff_t *pos, void *data);
+int proc_get_wow_mdns_passthru_list(struct seq_file *m, void *v);
+ssize_t proc_set_wow_mdns_offload_state(struct file *file,
+		const char __user *buffer, size_t count, loff_t *pos, void *data);
+int proc_get_wow_mdns_offload_state(struct seq_file *m, void *v);
+ssize_t proc_set_wow_mdns_passthru_behavior(struct file *file,
+		const char __user *buffer, size_t count, loff_t *pos, void *data);
+int proc_get_wow_mdns_passthru_behavior(struct seq_file *m, void *v);
+#endif /* CONFIG_MDNS_OFFLOAD */
 #ifdef CONFIG_WOW_PERIODIC_WAKE
 int proc_get_wow_pw_info(struct seq_file *m, void *v);
 ssize_t proc_set_wow_pw_info(struct file *file, const char __user *buffer,
 			     size_t count, loff_t *pos, void *data);
 #endif
+
+#ifdef CONFIG_APF
+ssize_t proc_set_apf(struct file *file, const char __user *buffer,
+		     size_t count, loff_t *pos, void *data);
+int proc_get_apf(struct seq_file *m, void *v);
+#endif
+
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_P2P_WOWLAN

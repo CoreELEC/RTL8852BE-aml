@@ -564,7 +564,7 @@ static void init_mp_data(_adapter *padapter)
 
 u32 mp_join(_adapter *padapter, u8 mode)
 {
-	WLAN_BSSID_EX bssid;
+	WLAN_BSSID_EX *bssid;
 	struct sta_info *psta;
 	u32 length;
 	s32 res = _SUCCESS;
@@ -582,31 +582,37 @@ u32 mp_join(_adapter *padapter, u8 mode)
 	void *phl = GET_PHL_INFO(adapter_to_dvobj(padapter));
 
 	/* 1. initialize a new WLAN_BSSID_EX */
-	_rtw_memset(&bssid, 0, sizeof(WLAN_BSSID_EX));
+	bssid = (WLAN_BSSID_EX *)rtw_zmalloc(sizeof(WLAN_BSSID_EX));
+	if (!bssid) {
+		RTW_ERR(FUNC_ADPT_FMT" buffer alloc fail\n", FUNC_ADPT_ARG(padapter));
+		res = _FAIL;
+		return res;
+	}
+
 	RTW_INFO("%s ,pmppriv->network_macaddr=%x %x %x %x %x %x\n", __func__,
 		pmppriv->network_macaddr[0], pmppriv->network_macaddr[1], pmppriv->network_macaddr[2], pmppriv->network_macaddr[3], pmppriv->network_macaddr[4],
 		 pmppriv->network_macaddr[5]);
-	_rtw_memcpy(bssid.MacAddress, pmppriv->network_macaddr, ETH_ALEN);
+	_rtw_memcpy(bssid->MacAddress, pmppriv->network_macaddr, ETH_ALEN);
 
 	if (mode == WIFI_FW_ADHOC_STATE) {
-		bssid.Ssid.SsidLength = strlen("mp_pseudo_adhoc");
-		_rtw_memcpy(bssid.Ssid.Ssid, (u8 *)"mp_pseudo_adhoc", bssid.Ssid.SsidLength);
-		bssid.InfrastructureMode = Ndis802_11IBSS;
-		bssid.IELength = 0;
-		bssid.Configuration.DSConfig = pmppriv->channel;
+		bssid->Ssid.SsidLength = strlen("mp_pseudo_adhoc");
+		_rtw_memcpy(bssid->Ssid.Ssid, (u8 *)"mp_pseudo_adhoc", bssid->Ssid.SsidLength);
+		bssid->InfrastructureMode = Ndis802_11IBSS;
+		bssid->IELength = 0;
+		bssid->Configuration.DSConfig = pmppriv->channel;
 
 	} else if (mode == WIFI_FW_STATION_STATE) {
-		bssid.Ssid.SsidLength = strlen("mp_pseudo_STATION");
-		_rtw_memcpy(bssid.Ssid.Ssid, (u8 *)"mp_pseudo_STATION", bssid.Ssid.SsidLength);
-		bssid.InfrastructureMode = Ndis802_11Infrastructure;
-		bssid.IELength = 0;
+		bssid->Ssid.SsidLength = strlen("mp_pseudo_STATION");
+		_rtw_memcpy(bssid->Ssid.Ssid, (u8 *)"mp_pseudo_STATION", bssid->Ssid.SsidLength);
+		bssid->InfrastructureMode = Ndis802_11Infrastructure;
+		bssid->IELength = 0;
 	}
 
-	length = get_WLAN_BSSID_EX_sz(&bssid);
+	length = get_WLAN_BSSID_EX_sz(bssid);
 	if (length % 4)
-		bssid.Length = ((length >> 2) + 1) << 2; /* round up to multiple of 4 bytes. */
+		bssid->Length = ((length >> 2) + 1) << 2; /* round up to multiple of 4 bytes. */
 	else
-		bssid.Length = length;
+		bssid->Length = length;
 
 	_rtw_spinlock_bh(&pmlmepriv->lock);
 
@@ -627,7 +633,7 @@ u32 mp_join(_adapter *padapter, u8 mode)
 			continue;
 		if (check_fwstate(buddy_mlmepriv, WIFI_ASOC_STATE) == _TRUE) {
 			rtw_disassoc_cmd(iface, 500, RTW_CMDF_WAIT_ACK);
-			rtw_indicate_disconnect(iface, 0, _FALSE);
+			rtw_indicate_disconnect(iface, 0, _TRUE);
 		}
 	}
 
@@ -642,14 +648,14 @@ u32 mp_join(_adapter *padapter, u8 mode)
 	if (psta)
 		rtw_free_mld_stainfo(padapter, psta->phl_sta->mld);
 	/* ToDo CONFIG_RTW_MLD: MLD MAC Address */
-	pmld = rtw_phl_alloc_mld(GET_PHL_INFO(adapter_to_dvobj(padapter)), padapter->phl_role, bssid.MacAddress, DTYPE);
+	pmld = rtw_phl_alloc_mld(GET_PHL_INFO(adapter_to_dvobj(padapter)), padapter->phl_role, bssid->MacAddress, DTYPE);
 	if (pmld == NULL) {
 		init_fwstate(pmlmepriv, pmppriv->prev_fw_state);
 		res = _FAIL;
 		goto end_of_mp_start_test;
 	}
 	/* main_id is don't care for self */
-	psta = rtw_alloc_stainfo(&padapter->stapriv, bssid.MacAddress, DTYPE, 0, padapter_link->wrlink->id, PHL_CMD_DIRECTLY);
+	psta = rtw_alloc_stainfo(&padapter->stapriv, bssid->MacAddress, DTYPE, 0, padapter_link->wrlink->id, PHL_CMD_DIRECTLY);
 	if (psta == NULL) {
 		/*pmlmepriv->fw_state = pmppriv->prev_fw_state;*/
 		init_fwstate(pmlmepriv, pmppriv->prev_fw_state);
@@ -664,7 +670,7 @@ u32 mp_join(_adapter *padapter, u8 mode)
 	tgt_network->join_res = 1;
 	tgt_network->aid = psta->phl_sta->aid = 1;
 
-	_rtw_memcpy(&padapter->registrypriv.dev_network, &bssid, length);
+	_rtw_memcpy(&padapter->registrypriv.dev_network, bssid, length);
 	rtw_update_registrypriv_dev_network(padapter);
 	_rtw_memcpy(&tgt_network->network, &padapter->registrypriv.dev_network, padapter->registrypriv.dev_network.Length);
 	_rtw_memcpy(pnetwork, &padapter->registrypriv.dev_network, padapter->registrypriv.dev_network.Length);
@@ -693,6 +699,7 @@ end_of_mp_start_test:
 		}
 	}
 
+	rtw_mfree((void *)bssid, sizeof(WLAN_BSSID_EX));
 	return res;
 }
 /* This function initializes the DUT to the MP test mode */
@@ -761,7 +768,7 @@ void mp_stop_test(_adapter *padapter)
 			goto end_of_mp_stop_test;
 
 		/* 3 1. disconnect psudo AdHoc */
-		rtw_indicate_disconnect(padapter, 0, _FALSE);
+		rtw_indicate_disconnect(padapter, 0, _TRUE);
 
 		/* 3 2. clear psta used in mp test mode.
 		*	rtw_free_assoc_resources(padapter, _TRUE); */
@@ -933,8 +940,8 @@ u16 rtw_mp_txpower_dbm(_adapter *adapter, u8 rf_path)
 {
 	struct mp_priv *pmppriv = &adapter->mppriv;
 	struct rtw_mp_txpwr_arg	ptxpwr_arg;
-	u16 tmp_power_ref = 0;
-	u16 agc_cw_val = 0;
+	s16 tmp_power_ref = 0;
+	s16 agc_cw_val = 0;
 	s16 pre_pwr_refcw_idx = 0;
 	u8 rfpath_i = 0;
 	struct _ADAPTER_LINK *padapter_link = GET_PRIMARY_LINK(adapter);
@@ -2932,7 +2939,7 @@ u16 rtw_mp_rate_parse(_adapter *adapter, u8 *target_str)
 	}
 	rtw_mp_update_coding(adapter);
 
-		for (i = 0; i <= MP_RATE_STR_LEN; i++) {
+		for (i = 0; i < 12; i++) {
 		if (strcmp(target_str, rtw_mp_rateidx_arrdef[i + mcs_idx_base]) == 0) {
 				pmppriv->mp_plcp_user[user_idx].plcp_mcs = i;
 				RTW_INFO("%s , PLCP MCS = %d\n", __func__ , pmppriv->mp_plcp_user[user_idx].plcp_mcs);

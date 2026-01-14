@@ -133,7 +133,7 @@ bool rtw_phl_query_rf_diag_info(void *phl,
 
 #ifdef CONFIG_PHL_H2C_PKT_POOL_STATS_CHECK
 struct phl_h2c_pkt_alloc_cnt *
-rtw_phl_dump_h2c_pool_alloc_stats(struct phl_info_t *phl_info);
+rtw_phl_dump_h2c_pool_alloc_stats(void *phl);
 #endif
 
 #ifdef CONFIG_PHL_CUSTOM_FEATURE

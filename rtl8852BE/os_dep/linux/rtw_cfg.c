@@ -70,6 +70,14 @@ MODULE_PARM_DESC(rtw_lps_listen_bcn_mode, "The default lps dtim mode");
 int rtw_lps_awake_interval = 0;
 module_param(rtw_lps_awake_interval, int, 0644);
 MODULE_PARM_DESC(rtw_lps_awake_interval, "The default LPS awake interval");
+
+int rtw_lps_intensive_trx_lvl = RTW_TFC_IDLE;
+module_param(rtw_lps_intensive_trx_lvl, int, 0644);
+MODULE_PARM_DESC(rtw_lps_intensive_trx_lvl, "The default lps intensive trx level");
+
+int rtw_lps_intensive_chk = true;
+module_param(rtw_lps_intensive_chk, int, 0644);
+MODULE_PARM_DESC(rtw_lps_intensive_chk, "The default lps intensive check");
 #endif /* CONFIG_RTW_LPS */
 
 #ifdef CONFIG_WOWLAN
@@ -215,7 +223,7 @@ int rtw_tx_amsdu_aggnum = 2;
 int rtw_tx_ampdu_num = 0;
 module_param(rtw_tx_ampdu_num, int, 0644);
 
-int rtw_quick_addba_req = 0;
+int rtw_quick_addba_req = 1;
 
 static uint rtw_rx_ampdu_sz_limit_1ss[4] = CONFIG_RTW_RX_AMPDU_SZ_LIMIT_1SS;
 static uint rtw_rx_ampdu_sz_limit_1ss_num = 0;
@@ -516,6 +524,8 @@ MODULE_PARM_DESC(ifname, "The default name to allocate for first interface");
 
 #ifdef CONFIG_PLATFORM_ANDROID
 	char *if2name = "p2p%d";
+#elif defined(CONFIG_IFACE2_NAME)
+	char *if2name = CONFIG_IFACE2_NAME;
 #else /* CONFIG_PLATFORM_ANDROID */
 	char *if2name = "wlan%d";
 #endif /* CONFIG_PLATFORM_ANDROID */
@@ -565,6 +575,9 @@ char *rtw_initmac = 0;  /* temp mac address if users want to use instead of the 
 /* affect ap/go cw only so far , 0 is no change*/
 uint rtw_vo_edca = 0;
 module_param(rtw_vo_edca, uint, 0644);
+
+uint rtw_dis_turboedca = CONFIG_RTW_DIS_TURBOEDCA;
+module_param(rtw_dis_turboedca, uint, 0644);
 
 #ifdef CONFIG_AP_MODE
 uint rtw_max_ap_assoc_sta = CONFIG_RTW_MAX_AP_ASSOC_STA;
@@ -690,7 +703,7 @@ MODULE_PARM_DESC(rtw_hiq_filter, "0:allow all, 1:allow special, 2:deny all");
 
 uint rtw_edcca_mode_sel = CONFIG_RTW_EDCCA_MODE_SEL;
 module_param(rtw_edcca_mode_sel, uint, 0644);
-MODULE_PARM_DESC(rtw_edcca_mode_sel, "0:NORMAL, 1:CS, 2:ADPT, 3:CBP, 0xFF:auto");
+MODULE_PARM_DESC(rtw_edcca_mode_sel, "0:NORMAL, 1:CS, 2:ADPT, 3:CBP, 255:auto");
 
 uint rtw_adaptivity_en = CONFIG_RTW_ADAPTIVITY_EN;
 module_param(rtw_adaptivity_en, uint, 0644);
@@ -741,6 +754,10 @@ module_param(rtw_dbcc_itf_ctl, int, 0644);
 MODULE_PARM_DESC(rtw_dbcc_itf_ctl, "0:can't control interference, 1:can control interference");
 
 #ifdef CONFIG_DBCC_FORCE
+int rtw_dbcc_force_mode = 1;
+module_param(rtw_dbcc_force_mode, int, 0644);
+MODULE_PARM_DESC(rtw_dbcc_force_mode, "DBCC force mode");
+
 /* rmap - bitmap of wrole(idx) - force roles (idx) operate in band1*/
 int rtw_dbcc_force_rmap = 0;
 module_param(rtw_dbcc_force_rmap, int, 0644);
@@ -1243,7 +1260,7 @@ inline void rtw_regsty_load_country_ie_slave_settings(struct registry_priv *regs
 static void rtw_regsty_load_edcca_mode_settings(struct registry_priv *regsty)
 {
 	regsty->edcca_mode_sel = (u8)rtw_edcca_mode_sel;
-	if (regsty->edcca_mode_sel < RTW_EDCCA_MODE_NUM || regsty->edcca_mode_sel == RTW_EDCCA_AUTO) {
+	if (RTW_EDCCA_MODE_SEL_VALID(regsty->edcca_mode_sel)) {
 		if (regsty->edcca_mode_sel == RTW_EDCCA_NORM) {
 			/* consider old interfaces */
 			if (rtw_adaptivity_en == RTW_ADAPTIVITY_EN_ENABLE) {
@@ -1524,6 +1541,7 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 	phl_com->dev_sw_cap.dbcc_sup = rtw_dbcc_en;
 	phl_com->dev_sw_cap.mcmb_itf_ctrl = rtw_dbcc_itf_ctl;
 #ifdef CONFIG_DBCC_FORCE
+	phl_com->dev_sw_cap.dbcc_force_mode = rtw_dbcc_force_mode;
 	phl_com->dev_sw_cap.dbcc_force_rmap = rtw_dbcc_force_rmap;
 	phl_com->dev_sw_cap.dbcc_force_cck_phyidx = rtw_dbcc_force_cck_phyidx;
 #endif /*CONFIG_DBCC_FORCE*/
@@ -1755,9 +1773,10 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 	phl_com->dev_sw_cap.rf_board_opt = 0xFF;
 
 #ifdef CONFIG_POWER_SAVE
+	phl_com->dev_sw_cap.ps_cap.leave_fail_act = PS_LEAVE_FAIL_SER_L1_RECOVERY;
 #ifdef CONFIG_RTW_WKARD_PS_DEFAULT_OFF
 	phl_com->dev_sw_cap.ps_cap.init_rt_stop_rson = PS_RT_DEBUG;
-#endif
+#endif /* CONFIG_RTW_WKARD_PS_DEFAULT_OFF */
 #ifdef CONFIG_RTW_IPS
 	rtw_update_ips_setting(RTW_IPS_MODE, rtw_ips_mode,
 			       &phl_com->dev_sw_cap.ps_cap.ips_en,
@@ -1771,6 +1790,8 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 					 (u8)rtw_lps_listen_bcn_mode,
 					 (u8)rtw_lps_awake_interval,
 					 &phl_com->dev_sw_cap.ps_cap, _FALSE);
+	phl_com->dev_sw_cap.ps_cap.lps_intensive_trx_lvl = rtw_lps_intensive_trx_lvl;
+	phl_com->dev_sw_cap.ps_cap.lps_intensive_chk = rtw_lps_intensive_chk;
 #endif /* CONFIG_RTW_LPS */
 #ifdef CONFIG_WOWLAN
 #ifdef CONFIG_RTW_IPS_WOW
@@ -1822,7 +1843,11 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 #else
 	dvobj->phl_com->dev_sw_cap.sec_cap.hw_form_hdr = false;
 #endif
+#ifdef CONFIG_APF
+	dvobj->phl_com->dev_sw_cap.sec_cap.hw_sec_iv = true;
+#else
 	dvobj->phl_com->dev_sw_cap.sec_cap.hw_sec_iv = false;
+#endif
 	dvobj->phl_com->dev_sw_cap.sec_cap.hw_tx_search_key = false;
 
 #ifdef CONFIG_80211AX_HE
@@ -2206,6 +2231,14 @@ int rtw_stbc_cap = 0x13;
 #ifdef CONFIG_FW_OFFLOAD_PARAM_INIT
 	registry_par->fw_param_init = rtw_fw_param_init;
 #endif
+
+	if (rtw_dis_turboedca < DIS_TURBO_EDCA_NUM)
+		registry_par->dis_turboedca = rtw_dis_turboedca;
+	else {
+		RTW_WARN("%s invalid rtw_dis_turboedca(%u), use EN_TURBO instead\n", __func__, rtw_dis_turboedca);
+		registry_par->dis_turboedca = EN_TURBO;
+	}
+
 #ifdef CONFIG_AP_MODE
 	registry_par->max_ap_assoc_sta = (u8)rtw_max_ap_assoc_sta;
 	registry_par->bmc_tx_rate = rtw_bmc_tx_rate;
@@ -2273,29 +2306,11 @@ int rtw_stbc_cap = 0x13;
 	return status;
 }
 
-static void rtw_cfg_edcca_mode_msg(void *sel, _adapter *adapter)
-{
-	struct registry_priv *regsty = &adapter->registrypriv;
-
-	RTW_PRINT_SEL(sel, "RTW_EDCCA_");
-	if (regsty->edcca_mode_sel == RTW_EDCCA_AUTO)
-		_RTW_PRINT_SEL(sel, "AUTO\n");
-	else
-		_RTW_PRINT_SEL(sel, "%s\n", rtw_edcca_mode_str(regsty->edcca_mode_sel));
-}
-
 void rtw_cfg_adaptivity_config_msg(void *sel, _adapter *adapter)
 {
 	struct registry_priv *regsty = &adapter->registrypriv;
 
-	rtw_cfg_edcca_mode_msg(sel, adapter);
-	_RTW_PRINT_SEL(sel, "adaptivity_idle_probability = %u\n", regsty->adaptivity_idle_probability);
-}
-
-bool rtw_cfg_adaptivity_needed(_adapter *adapter)
-{
-	struct registry_priv *regsty = &adapter->registrypriv;
-
-	return regsty->edcca_mode_sel != RTW_EDCCA_NORM;
+	rtw_edcca_mode_sel_msg(sel, adapter_to_dvobj(adapter));
+	RTW_PRINT_SEL(sel, "adaptivity_idle_probability = %u\n", regsty->adaptivity_idle_probability);
 }
 

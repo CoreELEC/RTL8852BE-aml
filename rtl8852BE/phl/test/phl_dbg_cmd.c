@@ -30,6 +30,13 @@ static const struct phl_dbg_cmd_info phl_dbg_core_cmd_i[] = {
 	{"git_info", PHL_DBG_CORE_GIT_INFO}
 };
 
+struct _hal_proc_cmd_param {
+	char proc_cmd;
+	struct rtw_proc_cmd *incmd;
+	char *output;
+	u32 out_len;
+};
+
 void phl_dbg_git_info(struct phl_info_t *phl_info, char input[][MAX_ARGV],
 		      u32 input_num, char *output, u32 out_len)
 {
@@ -147,11 +154,9 @@ phl_dbg_core_proc_cmd(struct phl_info_t *phl_info,
 	return 0;
 }
 
-enum rtw_phl_status
-rtw_phl_dbg_core_cmd(struct phl_info_t *phl_info,
-		     struct rtw_proc_cmd *incmd,
-		     char *output,
-		     u32 out_len)
+enum rtw_phl_status phl_dbg_core_cmd(struct phl_info_t *phl_info,
+				     struct rtw_proc_cmd *incmd, char *output,
+				     u32 out_len)
 {
 	if (incmd->in_type == RTW_ARG_TYPE_BUF) {
 		phl_dbg_core_proc_cmd(phl_info, incmd->in.buf, output, out_len);
@@ -159,6 +164,36 @@ rtw_phl_dbg_core_cmd(struct phl_info_t *phl_info,
 		phl_dbg_core_cmd_parser(phl_info, incmd->in.vector,
 				   incmd->in_cnt_len, output, out_len);
 	}
+	return RTW_PHL_STATUS_SUCCESS;
+}
+
+enum rtw_phl_status phl_dbg_hal_cmd(struct phl_info_t *phl_info, char proc_cmd,
+				    struct rtw_proc_cmd *incmd, char *output,
+				    u32 out_len)
+{
+	struct _hal_proc_cmd_param param = {0};
+
+	param.proc_cmd = proc_cmd;
+	param.incmd = incmd;
+	param.output = output;
+	param.out_len = out_len;
+
+	return phl_cmd_enqueue(phl_info, HW_BAND_0, MSG_EVT_DBG_HAL_PROC_CMD,
+			       (u8 *)&param, sizeof(struct _hal_proc_cmd_param),
+			       NULL, PHL_CMD_WAIT, 0);
+}
+
+enum rtw_phl_status phl_cmd_hal_proc_cmd_hdl(struct phl_info_t *phl_info,
+					     u8 *param)
+{
+	struct _hal_proc_cmd_param *p = (struct _hal_proc_cmd_param *)param;
+
+	if (RTW_HAL_STATUS_SUCCESS != rtw_hal_proc_cmd(phl_info->hal,
+						       p->proc_cmd, p->incmd,
+						       p->output, p->out_len)) {
+		return RTW_PHL_STATUS_FAILURE;
+	}
+
 	return RTW_PHL_STATUS_SUCCESS;
 }
 
@@ -2685,9 +2720,8 @@ void phl_dbg_cmd_parser(struct phl_info_t *phl_info, char input[][MAX_ARGV],
 	}
 }
 
-s32
-phl_dbg_proc_cmd(struct phl_info_t *phl_info,
-		 char *input, char *output, u32 out_len)
+static s32 _dbg_proc_cmd(struct phl_info_t *phl_info, char *input, char *output,
+			 u32 out_len)
 {
 	char *token;
 	u32 argc = 0;
@@ -2710,18 +2744,26 @@ phl_dbg_proc_cmd(struct phl_info_t *phl_info,
 	return 0;
 }
 
-enum rtw_hal_status
-rtw_phl_dbg_proc_cmd(struct phl_info_t *phl_info,
-		     struct rtw_proc_cmd *incmd,
-		     char *output,
-		     u32 out_len)
+enum rtw_hal_status phl_dbg_proc_cmd(struct phl_info_t *phl_info,
+				     struct rtw_proc_cmd *incmd, char *output,
+				     u32 out_len)
 {
 	if (incmd->in_type == RTW_ARG_TYPE_BUF) {
-		phl_dbg_proc_cmd(phl_info, incmd->in.buf, output, out_len);
+		_dbg_proc_cmd(phl_info, incmd->in.buf, output, out_len);
 	} else if(incmd->in_type == RTW_ARG_TYPE_ARRAY){
 		phl_dbg_cmd_parser(phl_info, incmd->in.vector,
 				   incmd->in_cnt_len, output, out_len);
 	}
+	return RTW_HAL_STATUS_SUCCESS;
+}
+#else
+
+enum rtw_hal_status
+rtw_phl_dbg_proc_cmd(struct phl_info_t *phl_info,
+                     struct rtw_proc_cmd *incmd,
+                     char *output,
+                     u32 out_len)
+{
 	return RTW_HAL_STATUS_SUCCESS;
 }
 

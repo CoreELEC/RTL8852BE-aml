@@ -2113,6 +2113,25 @@ rtw_phl_get_operating_class(
 	return operating_class;
 }
 
+enum chan_offset
+_get_6g_bw40_ofst(u8 pri_ch)
+{
+	if (pri_ch < 1 || pri_ch > 229) {
+		PHL_WARN("%s: pri_ch(%d) out of range\n", __FUNCTION__, pri_ch);
+		return CHAN_OFFSET_NO_DEF;
+	}
+	/* pri ch    : 1,9, 17,25,33,41
+	 * center_ch : 3,11,19,27,35,43
+	 *
+	 * pri ch    : 5,13,21,29,37,45
+	 * center_ch : 3,11,19,27,35,43
+	 */
+	if (((pri_ch - 1) % 8) == 0)
+		return CHAN_OFFSET_UPPER;
+	else
+		return CHAN_OFFSET_LOWER;
+}
+
 bool
 rtw_phl_get_chandef_from_operating_class(
 	u8 channel,
@@ -2193,22 +2212,22 @@ rtw_phl_get_chandef_from_operating_class(
 		/* 6G 40MHz */
 		chan_def->chan = channel;
 		chan_def->bw = CHANNEL_WIDTH_40;
-		chan_def->offset = CHAN_OFFSET_NO_DEF;
-		chan_def->center_ch = channel;
+		chan_def->offset = _get_6g_bw40_ofst(chan_def->chan);
+		chan_def->center_ch = rtw_phl_get_center_ch(chan_def);
 		chan_def->band = BAND_ON_6G;
 	} else if(operating_class == 133 || operating_class == 135) {
 		/* 6G 80MHz */
 		chan_def->chan = channel;
 		chan_def->bw = CHANNEL_WIDTH_80;
 		chan_def->offset = CHAN_OFFSET_NO_DEF;
-		chan_def->center_ch = channel;
+		chan_def->center_ch = rtw_phl_get_center_ch(chan_def);
 		chan_def->band = BAND_ON_6G;
 	} else if(operating_class == 134) {
 		/* 6G 160MHz */
 		chan_def->chan = channel;
 		chan_def->bw = CHANNEL_WIDTH_160;
 		chan_def->offset = CHAN_OFFSET_NO_DEF;
-		chan_def->center_ch = channel;
+		chan_def->center_ch = rtw_phl_get_center_ch(chan_def);
 		chan_def->band = BAND_ON_6G;
 	} else {
 		PHL_ERR("%s: Unknown operating class (%d)\n", __FUNCTION__, operating_class);

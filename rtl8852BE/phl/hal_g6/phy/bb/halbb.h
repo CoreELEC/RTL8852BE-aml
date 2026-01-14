@@ -460,6 +460,7 @@ struct bb_info {
 	enum bb_80211spec_t	bb_80211spec;
 	u8			num_ss; /*SS*/
 	u8			num_rf_path; /*STS*/
+	u8			num_tx_path; /*MAX TX PATH*/
 	u16			bb_sta_cnt;
 	/*[System Info]*/
 	bool			is_mp_mode_pre;

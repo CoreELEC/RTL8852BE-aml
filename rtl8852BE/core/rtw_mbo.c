@@ -1272,7 +1272,10 @@ void rtw_mbo_build_wnm_notification(
 	u8 non_pref_ch_oui[] = {0x50, 0x6F, 0x9A, 0x2};
 	u8 cell_data_cap_oui[] = {0x50, 0x6F, 0x9A, 0x3};
 	u8 cell_data_con = rtw_mbo_cell_data_conn;
-	u8 len, cell_data_con_len = 0, *pcont = *pframe;
+	u8 len, cell_data_con_len = 0;
+#if RTW_MBO_DBG
+	u8 *pcont = *pframe;
+#endif
 	int i;
 
 	if (rtw_mbo_cell_data_conn > 0) {
@@ -1287,8 +1290,10 @@ void rtw_mbo_build_wnm_notification(
 				&cell_data_con, &(pattrib->pktlen));
 		RTW_MBO_INFO("%s : Cellular Data Capabilities subelemen\n",
 				__func__);
+#if RTW_MBO_DBG
 		RTW_MBO_DUMP(":", pcont, len + 2);
 		pcont += len + 2 ;
+#endif
 	}
 
 	if (prpt->nm_of_rpt == 0) {
@@ -1325,8 +1330,10 @@ void rtw_mbo_build_wnm_notification(
 				&pch->reason, &(pattrib->pktlen));
 		RTW_MBO_INFO("%s :Non-preferred Channel Report"
 				" subelement\n", __func__);
+#if RTW_MBO_DBG
 		RTW_MBO_DUMP(":", pcont, len);
 		pcont = *pframe;
+#endif
 	}
 }
 
@@ -1334,6 +1341,9 @@ void rtw_mbo_build_probe_req_ies(
 	_adapter *padapter, u8 **pframe, struct pkt_attrib *pattrib)
 {
 	u32 len =0;
+
+	if (padapter->dis_rt_cap & BIT(DIS_MBO))
+		return;
 
 	rtw_mbo_build_extended_cap(padapter, pframe, pattrib);
 

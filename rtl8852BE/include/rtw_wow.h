@@ -30,6 +30,9 @@
 		#define DEFAULT_PATTERN_NUM 3
 	#endif
 
+#ifdef CONFIG_GOOGLE_CAST_WAKEUP
+	#define GOOGLE_CAST_PATTERN_NUM 3
+#endif
 #define MAX_WKFM_CAM_NUM	18 /* same as MAX_WOW_CAM_NUM */
 
 #define MAX_WKFM_SIZE	16 /* (16 bytes for WKFM bit mask, 16*8 = 128 bits) */
@@ -113,6 +116,13 @@ typedef struct rtl_priv_pattern {
 	char mask[MAX_WKFM_SIZE];
 } rtl_priv_pattern_t;
 
+#ifdef CONFIG_APF
+enum rtw_screen_mode {
+	SCREEN_ON = 0,
+	SCREEN_OFF = 1,
+};
+#endif
+
 struct wow_priv {
 	enum rtw_mac_wow_wake_reason wow_wake_reason;
 
@@ -120,6 +130,17 @@ struct wow_priv {
 	struct rtw_disc_det_info wow_disc;
 #ifdef CONFIG_PNO_SUPPORT
 	struct rtw_nlo_info wow_nlo;
+#endif
+#ifdef CONFIG_MDNS_OFFLOAD
+	struct rtw_mdns_ofld_info mdns_ofld_info; //ryan
+#endif
+#ifdef CONFIG_APF
+	enum rtw_screen_mode screen_mode;
+	enum mlme_state mstate;
+	struct phl_apf_info apf_info;
+	/* TP th for active apf */
+	u32 apf_active_tp_th;
+	u8 dump_apf_ram;
 #endif
 #ifdef CONFIG_WOW_PERIODIC_WAKE
 	struct rtw_periodic_wake_info wow_periodic_wake;
@@ -136,6 +157,9 @@ u8 rtw_wow_pattern_set(_adapter *adapter,
 		       struct rtw_wowcam_upd_info * wowcam_info,
 		       enum pattern_type set_type);
 void rtw_wow_pattern_clean(_adapter *adapter, enum pattern_type clean_type);
+#ifdef CONFIG_GOOGLE_CAST_WAKEUP
+void rtw_set_google_cast_mdns_wow_pattern(_adapter *padapter);
+#endif
 void rtw_set_default_pattern(_adapter *adapter);
 void rtw_wow_pattern_sw_dump(_adapter *adapter);
 void rtw_construct_remote_control_info(_adapter *adapter,
@@ -159,6 +183,23 @@ void rtw_wowlan_set_pattern_cast_type(_adapter *adapter, struct rtw_wowcam_upd_i
  */
 u8 rtw_cfg_wrc_wol_magic(_adapter *padapter, u8 enable);
 #endif
+
+#ifdef CONFIG_MDNS_OFFLOAD
+int rtw_wow_add_mdns_resp(_adapter *padapter, u8 index, u8 *resp_content, u16 content_len);
+int rtw_wow_del_mdns_resp(_adapter *padapter, u8 index);
+int rtw_wow_get_mdns_resp_ent(_adapter *padapter, u8 index, struct rtw_mdns_resp_entry **resp_entry);
+int rtw_wow_add_mdns_match_crit(_adapter *padapter, u8 index, u16 match_type, u16 name_offset, u16 name_len);
+int rtw_wow_del_mdns_match_crit(_adapter *padapter, u8 index);
+int rtw_wow_add_mdns_passthru_name(_adapter *padapter, u8 *name, u8 name_len);
+void rtw_wow_clr_mdns_passthru_name(_adapter *padapter);
+void rtw_wow_get_mdns_passthru_list(_adapter *padapter, struct rtw_mdns_passthru_list **passthru_list);
+#endif
+
+#ifdef CONFIG_APF
+void rtw_init_apf(struct _ADAPTER *padapter);
+void rtw_apf_cmd_hdl(struct _ADAPTER *padapter, enum phl_apf_cmd cmd);
+#endif
+
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_PNO_SUPPORT

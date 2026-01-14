@@ -747,36 +747,36 @@ _parse_ml_link_info(struct rtw_phl_com_t *phl_com,
 }
 
 void
-_dump_ml_basic(struct rtw_phl_ml_element ml_ele)
+_dump_ml_basic(struct rtw_phl_ml_element *ml_ele)
 {
 	PHL_INFO("###### _dump_ml_basic #######\n");
-	if (ml_ele.common_info.basic_ml.link_id_info_present)
-		PHL_INFO("%-25s: %d\n", "Link ID", ml_ele.common_info.basic_ml.link_id);
+	if (ml_ele->common_info.basic_ml.link_id_info_present)
+		PHL_INFO("%-25s: %d\n", "Link ID", ml_ele->common_info.basic_ml.link_id);
 	else
 		PHL_INFO("%-25s: Not present\n", "Link ID");
-	if (ml_ele.common_info.basic_ml.bss_param_chg_cnt_present)
-		PHL_INFO("%-25s: %d\n", "BSS Param Chg Cnt", ml_ele.common_info.basic_ml.bss_param_chg_cnt);
+	if (ml_ele->common_info.basic_ml.bss_param_chg_cnt_present)
+		PHL_INFO("%-25s: %d\n", "BSS Param Chg Cnt", ml_ele->common_info.basic_ml.bss_param_chg_cnt);
 	else
 		PHL_INFO("%-25s: Not present\n", "BSS Param Chg Cnt");
-	if (ml_ele.common_info.basic_ml.msd_info_present)
+	if (ml_ele->common_info.basic_ml.msd_info_present)
 		PHL_INFO("%-25s: Present\n", "MSD Info");
 	else
 		PHL_INFO("%-25s: Not present\n", "MSD Info");
-	if (ml_ele.common_info.basic_ml.eml_cap_present)
+	if (ml_ele->common_info.basic_ml.eml_cap_present)
 		PHL_INFO("%-25s: Present\n", "EML Capability");
 	else
 		PHL_INFO("%-25s: Not present\n", "EML Capability");
-	if (ml_ele.common_info.basic_ml.mld_cap_present) {
+	if (ml_ele->common_info.basic_ml.mld_cap_present) {
 		PHL_INFO("%-25s =>\n", "MLD Capability");
 		PHL_INFO("%-25s: %d\n", "Max Num of SL",
-		         ml_ele.common_info.basic_ml.mld_cap.max_num_sl);
+		         ml_ele->common_info.basic_ml.mld_cap.max_num_sl);
 		PHL_INFO("%-25s: %s\n", "SRS Support",
-		         (ml_ele.common_info.basic_ml.mld_cap.srs_support == true)?"True":"False");
-		if (ml_ele.common_info.basic_ml.mld_cap.tid_to_link_nego_support == 0)
+		         (ml_ele->common_info.basic_ml.mld_cap.srs_support == true)?"True":"False");
+		if (ml_ele->common_info.basic_ml.mld_cap.tid_to_link_nego_support == 0)
 			PHL_INFO("%-25s: %s\n",
 			         "TID-To-Link Mapping Nego",
 			         "Not support");
-		else if (ml_ele.common_info.basic_ml.mld_cap.tid_to_link_nego_support == 1)
+		else if (ml_ele->common_info.basic_ml.mld_cap.tid_to_link_nego_support == 1)
 			PHL_INFO("%-25s: %s\n",
 			         "TID-To-Link Mapping Nego",
 			         "Same or different link set");
@@ -784,11 +784,11 @@ _dump_ml_basic(struct rtw_phl_ml_element ml_ele)
 			PHL_INFO("%-25s: %s\n",
 			         "TID-To-Link Mapping Nego",
 			         "Same link set only");
-		if (ml_ele.common_info.basic_ml.mld_cap.freq_sep_for_str)
+		if (ml_ele->common_info.basic_ml.mld_cap.freq_sep_for_str)
 			PHL_INFO("%-25s: %dMHz\n", "Freq Separation for STR",
-			         ((ml_ele.common_info.basic_ml.mld_cap.freq_sep_for_str - 1) * 80));
+			         ((ml_ele->common_info.basic_ml.mld_cap.freq_sep_for_str - 1) * 80));
 		PHL_INFO("%-25s: %s\n", "AAR Support",
-		         (ml_ele.common_info.basic_ml.mld_cap.aar_support == true)?"True":"False");
+		         (ml_ele->common_info.basic_ml.mld_cap.aar_support == true)?"True":"False");
 	} else {
 		PHL_INFO("%-25s: Not present\n", "MLD Capability");
 	}
@@ -847,7 +847,7 @@ _parse_ml_basic(struct rtw_phl_com_t *phl_com,
 		common_info_offset += 2;
 	}
 
-	_dump_ml_basic(*ml_ele);
+	_dump_ml_basic(ml_ele);
 
 	_parse_ml_link_info(phl_com,
 	                    ie_buf,
@@ -857,11 +857,11 @@ _parse_ml_basic(struct rtw_phl_com_t *phl_com,
 }
 
 void
-_dump_ml_probe_req(struct rtw_phl_ml_element ml_ele)
+_dump_ml_probe_req(struct rtw_phl_ml_element *ml_ele)
 {
 	PHL_INFO("###### _dump_ml_probe_req #######\n");
-	if (ml_ele.common_info.probe_req_ml.mld_id_present)
-		PHL_INFO("%-25s: %d\n", "MLD ID", ml_ele.common_info.probe_req_ml.mld_id);
+	if (ml_ele->common_info.probe_req_ml.mld_id_present)
+		PHL_INFO("%-25s: %d\n", "MLD ID", ml_ele->common_info.probe_req_ml.mld_id);
 	else
 		PHL_INFO("%-25s: Not present\n", "MLD ID");
 }
@@ -888,7 +888,7 @@ _parse_ml_probe_req(struct rtw_phl_com_t *phl_com,
 		common_info_offset += 1;
 	}
 
-	_dump_ml_probe_req(*ml_ele);
+	_dump_ml_probe_req(ml_ele);
 
 	_parse_ml_link_info(phl_com,
 	                    ie_buf,
@@ -1317,7 +1317,7 @@ u8 _parse_nb_info(struct rtw_phl_com_t *phl_com,
 			tbtt_info->mld_param.mld_id = GET_MLD_PARAMS_MLD_ID(pos);
 			tbtt_info->mld_param.link_id = GET_MLD_PARAMS_LINK_ID(pos);
 			tbtt_info->mld_param.bss_params_chg_cnt = GET_MLD_PARAMS_BSS_PARAMS_CHG_CNT(pos);
-			pos += 3;
+			/* pos += 3; */
 		}
 
 		/* ignore the rest reserved fields */

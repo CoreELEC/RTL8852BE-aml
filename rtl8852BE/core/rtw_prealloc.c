@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2016 - 2022 Realtek Corporation.
+ * Copyright(c) 2016 - 2024 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -18,13 +18,13 @@
 #include <drv_types.h>
 #include <rtw_mem.h>
 
-#if defined(CONFIG_STACKTRACE) &&                                              \
+#if defined(CONFIG_STACKTRACE) && \
 	(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0))
 #define STACKTRACE 1
 #define MAX_STACK_TRACE 4
 #endif /* CONFIG_STACKTRACE */
 
-#define TRACE_ORDER(a, b) ((a) && (((a)&BIT(b)) > 0))
+#define TRACE_ORDER(a, b) ((a) && (((a) & BIT(b)) > 0))
 
 #if (defined(CONFIG_RTKM) && defined(CONFIG_RTKM_STANDALONE))
 #ifdef pr_fmt
@@ -265,7 +265,13 @@ static inline void *_kmalloc(size_t size, gfp_t flags, int clear)
 	struct mem_entry *entry = NULL;
 
 	order = get_order(size);
+	if (order >= MAX_ORDER) {
+		pr_warn("%s: out of order, size %zu\n", __func__, size);
+		WARN_ON(1);
+		return NULL;
+	}
 
+	_rtw_spinlock_bh(&rtkm_phy_list[order].lock);
 	if (rtkm_phy_list[order].entries == rtkm_phy_list[order].used) {
 		if (rtkm_mem_exp) {
 			warn = _TRUE;
@@ -273,25 +279,21 @@ static inline void *_kmalloc(size_t size, gfp_t flags, int clear)
 				order);
 			entry = create_mem_entry(order);
 			if (entry) {
-				_rtw_spinlock_bh(&rtkm_phy_list[order].lock);
 				list_add_tail(
 					&entry->list,
 					&rtkm_phy_list[entry->order].list);
 				rtkm_phy_list[entry->order].entries++;
+			} else {
+				pr_warn("%s: No more memory for size %zu\n",
+					__func__, size);
+				WARN_ON(1);
 				_rtw_spinunlock_bh(&rtkm_phy_list[order].lock);
+				return NULL;
 			}
-		}
-
-		if (entry == NULL) {
-			pr_warn("%s: No more memory for size %ld\n", __func__,
-				size);
-			WARN_ON(1);
-			return NULL;
 		}
 	}
 
-	_rtw_spinlock_bh(&rtkm_phy_list[order].lock);
-	list_for_each_entry (entry, &rtkm_phy_list[order].list, list) {
+	list_for_each_entry(entry, &rtkm_phy_list[order].list, list) {
 		if (entry->is_use == _FALSE) {
 			list_del_init(&entry->list);
 			entry->is_use = _TRUE;
@@ -310,7 +312,7 @@ static inline void *_kmalloc(size_t size, gfp_t flags, int clear)
 	_rtw_spinunlock_bh(&rtkm_phy_list[order].lock);
 
 	if ((warn) || TRACE_ORDER(rtkm_trace, order)) {
-		pr_info("%s: require(%p, %lu) usage(%d %u/%u)\n", __func__,
+		pr_info("%s: require(%p, %zu) usage(%d %u/%u)\n", __func__,
 			entry->data, entry->size, order,
 			rtkm_phy_list[order].used,
 			rtkm_phy_list[order].entries);
@@ -326,6 +328,11 @@ static inline void _kfree(const void *objp, size_t size)
 	struct mem_entry *entry;
 
 	order = get_order(size);
+	if (order >= MAX_ORDER) {
+		pr_warn("%s: out of order, size %zu\n", __func__, size);
+		WARN_ON(1);
+		return;
+	}
 
 	if (!list_empty(&rtkm_phy_list[order].list)) {
 		_rtw_spinlock_bh(&rtkm_phy_list[order].lock);
@@ -334,7 +341,7 @@ static inline void _kfree(const void *objp, size_t size)
 		if (entry && (entry->is_use == _TRUE) &&
 		    (entry->data == objp)) {
 			if (TRACE_ORDER(rtkm_trace, order)) {
-				pr_info("%s: release(%p, %lu)\n", __func__,
+				pr_info("%s: release(%p, %zu)\n", __func__,
 					objp, size);
 			}
 			rtw_list_delete(&entry->list);
@@ -349,7 +356,7 @@ static inline void _kfree(const void *objp, size_t size)
 		_rtw_spinunlock_bh(&rtkm_phy_list[order].lock);
 	}
 	if (found == _FALSE) {
-		pr_warn("%s: not found (%p, %lu)\n", __func__, objp, size);
+		pr_warn("%s: not found (%p, %zu)\n", __func__, objp, size);
 	}
 }
 
@@ -391,6 +398,9 @@ static inline int rtkm_init_phy(void)
 	for (i = (MAX_ORDER - 1); i > -1; i--) {
 		INIT_LIST_HEAD(&rtkm_phy_list[i].list);
 		_rtw_spinlock_init(&rtkm_phy_list[i].lock);
+	}
+
+	for (i = (MAX_ORDER - 1); i > -1; i--) {
 		rtkm_phy_list[i].rb_tree = RB_ROOT;
 
 		for (j = 0; (ret == 0) && (j < mpool[i]); j++) {
@@ -434,7 +444,7 @@ static inline void rtkm_destroy_phy(void)
 			if (entry->is_use == _TRUE) {
 				rb_erase(&entry->rbn,
 					 &rtkm_phy_list[i].rb_tree);
-				pr_err("%s: memory leak! (%p, %lu)\n", __func__,
+				pr_err("%s: memory leak! (%p, %zu)\n", __func__,
 				       entry->data, entry->size);
 				stacktrace_print(entry, MAX_STACK_TRACE, 0);
 			}

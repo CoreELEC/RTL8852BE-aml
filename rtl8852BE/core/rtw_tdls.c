@@ -877,8 +877,9 @@ void rtw_tdls_process_he_cap(_adapter *padapter, struct sta_info *ptdls_sta, PND
 {
 	struct _ADAPTER_LINK *padapter_link = ptdls_sta->padapter_link;
 	struct rtw_phl_stainfo_t *phl_sta = NULL;
-	u8 supp_mcs_len = 4;
+	u8 supp_mcs_len = 0;
 	u8 *ele_start = (&(pIE->data[0]) + 1);
+	enum channel_width omn_chan_width = CHANNEL_WIDTH_MAX;
 
 	if (pIE == NULL)
 		return;
@@ -922,7 +923,8 @@ void rtw_tdls_process_he_cap(_adapter *padapter, struct sta_info *ptdls_sta, PND
 	ele_start += HE_CAP_ELE_MAC_CAP_LEN;
 
 	/* HE PHY Caps */
-	HE_phy_caps_handler(padapter, phl_sta, ele_start, &supp_mcs_len);
+	omn_chan_width = rtw_vht_get_omn_channel_width(ptdls_sta);
+	HE_phy_caps_handler(padapter, phl_sta, ele_start, &supp_mcs_len, omn_chan_width);
 	ele_start += HE_CAP_ELE_PHY_CAP_LEN;
 
 	/* HE Supp MCS Set */
@@ -987,6 +989,13 @@ u8 *rtw_tdls_set_ext_cap(u8 *pframe, struct pkt_attrib *pattrib)
 {
 	return rtw_set_ie(pframe, WLAN_EID_EXT_CAP , sizeof(TDLS_EXT_CAPIE), TDLS_EXT_CAPIE, &(pattrib->pktlen));
 }
+
+#ifdef CONFIG_TDLS_CH_SW
+u8 *rtw_tdls_set_ext_cap_chsw_sup(u8 *pframe, struct pkt_attrib *pattrib)
+{
+	return rtw_set_ie(pframe, WLAN_EID_EXT_CAP , sizeof(TDLS_EXT_CAPIE_CHSW_SUP), TDLS_EXT_CAPIE_CHSW_SUP, &(pattrib->pktlen));
+}
+#endif
 
 u8 *rtw_tdls_set_qos_cap(u8 *pframe, struct pkt_attrib *pattrib)
 {
@@ -3127,7 +3136,12 @@ void rtw_build_tdls_setup_req_ies(_adapter *padapter, struct xmit_frame *pxmitfr
 	if (pattrib->encrypt)
 		pframe = rtw_tdls_set_rsnie(ptxmgmt, pframe, pattrib,  _TRUE, ptdls_sta);
 
-	pframe = rtw_tdls_set_ext_cap(pframe, pattrib);
+#ifdef CONFIG_TDLS_CH_SW
+	if (pregistrypriv->wifi_spec)
+		pframe = rtw_tdls_set_ext_cap_chsw_sup(pframe, pattrib);
+	else
+#endif
+		pframe = rtw_tdls_set_ext_cap(pframe, pattrib);
 
 	if (pattrib->encrypt) {
 		pframe = rtw_tdls_set_ftie(ptxmgmt
@@ -3229,7 +3243,12 @@ void rtw_build_tdls_setup_rsp_ies(_adapter *padapter, struct xmit_frame *pxmitfr
 		pframe = rtw_tdls_set_rsnie(ptxmgmt, pframe, pattrib,  _FALSE, ptdls_sta);
 	}
 
-	pframe = rtw_tdls_set_ext_cap(pframe, pattrib);
+#ifdef CONFIG_TDLS_CH_SW
+	if (pregistrypriv->wifi_spec)
+		pframe = rtw_tdls_set_ext_cap_chsw_sup(pframe, pattrib);
+	else
+#endif
+		pframe = rtw_tdls_set_ext_cap(pframe, pattrib);
 
 	if (pattrib->encrypt) {
 		if (rtw_tdls_is_driver_setup(padapter) == _TRUE)
@@ -3456,7 +3475,12 @@ void rtw_build_tdls_dis_rsp_ies(_adapter *padapter, struct xmit_frame *pxmitfram
 	if (privacy)
 		pframe = rtw_tdls_set_rsnie(ptxmgmt, pframe, pattrib, _TRUE, NULL);
 
-	pframe = rtw_tdls_set_ext_cap(pframe, pattrib);
+#ifdef CONFIG_TDLS_CH_SW
+	if (pregistrypriv->wifi_spec)
+		pframe = rtw_tdls_set_ext_cap_chsw_sup(pframe, pattrib);
+	else
+#endif
+		pframe = rtw_tdls_set_ext_cap(pframe, pattrib);
 
 	if (privacy) {
 		pframe = rtw_tdls_set_ftie(ptxmgmt, pframe, pattrib, NULL, NULL);

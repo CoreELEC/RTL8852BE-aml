@@ -4754,7 +4754,6 @@ rtw_hal_mac_wow_req_tri_evt(struct hal_info_t *hal)
 		PHL_ERR("%s: failed, mac err (%u) \n", __func__, mac_err);
 		return RTW_HAL_STATUS_FAILURE;
 	}
-
 	return RTW_HAL_STATUS_SUCCESS;
 }
 
@@ -4788,6 +4787,188 @@ rtw_hal_mac_wow_dbg_dump(struct hal_info_t *hal_info)
 
 	return RTW_HAL_STATUS_SUCCESS;
 }
+
+
+#if defined(CONFIG_PHL_MDNS_OFFLOAD) || defined(CONFIG_PHL_APF)
+static enum rtw_hal_status
+_hal_mac_cfg_check_proxy_done(struct hal_info_t *hal_info,
+			      u8 *fw_ret)
+{
+	struct mac_ax_adapter *mac = hal_to_mac(hal_info);
+	struct mac_ax_ops *hal_mac_ops = mac->ops;
+	u16 loop_cnt = 0;
+
+	if (!mac)
+		return RTW_HAL_STATUS_MAC_INIT_FAILURE;
+
+	do {
+		if (hal_mac_ops->check_proxy_done(mac, fw_ret) == MACSUCCESS)
+			break;
+
+		_os_sleep_ms(hal_to_drvpriv(hal_info), POLLING_HALMAC_TIME);
+
+		loop_cnt++;
+	} while (loop_cnt < POLLING_HALMAC_CNT);
+
+	if (loop_cnt < POLLING_HALMAC_CNT) {
+		PHL_PRINT("%s, check count = %d.\n", __func__, loop_cnt);
+		return RTW_HAL_STATUS_SUCCESS;
+	} else {
+		PHL_ERR("%s, polling timeout!!!\n", __func__);
+		return RTW_HAL_STATUS_FAILURE;
+	}
+	return RTW_HAL_STATUS_SUCCESS;
+}
+#endif
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+enum rtw_hal_status
+rtw_hal_mac_cfg_mdns_ofld(struct hal_info_t *hal_info, u16 macid, u8 en,
+							struct rtw_mdns_ofld_info *cfg)
+{
+	struct mac_ax_adapter *mac = hal_to_mac(hal_info);
+	struct mac_ax_ops *hal_mac_ops = mac->ops;
+	struct rtw_hal_mac_mdns_ofld info = {0};
+	u8 ofld_idx;
+	u8 fw_ret;
+	u32 ret, mac_err;
+
+
+	if (en) {
+		info.ipv4_pktid = cfg->mdns_ipv4_header.ipv4_pktid;
+		info.ipv6_pktid = cfg->mdns_ipv6_header.ipv6_pktid;
+		info.mdns_offload_en = cfg->mdns_en;
+		info.offload_state = cfg->offload_state;
+		info.passthru_behavior = cfg->passthru_list.passthru_behavior;
+		info.macid = macid;
+		info.type = 0; /* reserved type */
+		/* mdns data response */
+		for (ofld_idx = 0; ofld_idx < MAX_MDNS_RESP_NUM; ofld_idx++) {
+			info.data_pktid[ofld_idx] = cfg->resp_entry[ofld_idx].data_pktid;
+			if (cfg->resp_entry[ofld_idx].content_len)
+				info.mdns_protocol_offset = info.mdns_protocol_offset | BIT(ofld_idx);
+		}
+		/* mdns passthru list */
+		for (ofld_idx = 0; ofld_idx < MAX_MDNS_PASSTHRU_NAME_NUM; ofld_idx++) {
+			info.pass_pktid[ofld_idx] = cfg->passthru_list.passthru_name[ofld_idx].pass_pktid;
+			if (cfg->passthru_list.passthru_name[ofld_idx].name_len)
+				info.passthru_list_offset = info.passthru_list_offset | BIT(ofld_idx);
+		}
+	}
+	else { // Disable
+		info.mdns_offload_en = 0;
+	}
+
+	mac_err = hal_mac_ops->mdns_ofld(mac, &info);
+
+	if (mac_err != MACSUCCESS) {
+		PHL_ERR("%s : failed, mac err (%u) \n", __func__, mac_err);
+		return RTW_HAL_STATUS_FAILURE;
+	}
+
+	ret = _hal_mac_cfg_check_proxy_done(hal_info, &fw_ret);
+
+	if (ret != RTW_HAL_STATUS_SUCCESS) {
+		PHL_ERR("%s : check proxy done fail \n", __func__);
+		return RTW_HAL_STATUS_FAILURE;
+	}
+
+	return RTW_HAL_STATUS_SUCCESS;
+}
+#endif /* CONFIG_PHL_MDNS_OFFLOAD */
+#ifdef CONFIG_PHL_APF
+#define APF_PKTID_OFST 4
+#define APF_PKTID_NUM 8
+/* Before calling rtw_hal_mac_ctrl_apf, must set rtw_apf_info->apf_cmd & do necessarry apf ram pkt ofld*/
+enum rtw_hal_status
+rtw_hal_mac_ctrl_apf(struct hal_info_t *hal_info, struct phl_apf_info *info)
+{
+	struct mac_ax_adapter *mac = hal_to_mac(hal_info);
+	struct mac_ax_ops *hal_mac_ops = mac->ops;
+	struct rtw_hal_mac_apf_ctrl *apf_ctrl = NULL;
+	u8 *pktids = NULL;
+	u8 i = 0;
+	u8 fw_ret = 0;
+	u32 mac_err = 0;
+
+	enum rtw_hal_status hstatus = RTW_HAL_STATUS_SUCCESS;
+
+	apf_ctrl = &mac->apf_info;
+	apf_ctrl->apf_cmd = info->apf_cmd;
+	apf_ctrl->apf_ram_size = MAX_APF_RAM_SIZE;
+	apf_ctrl->macid = info->macid;
+	apf_ctrl->pairwise_sec_algo = info->pairwise_sec_algo;
+	apf_ctrl->group_sec_algo = info->group_sec_algo;
+	apf_ctrl->hw_aes_iv = info->hw_sec_iv;
+
+	/* assign mac_pktid and apf_pktid with bitmask */
+	pktids = (u8*)((u8*)(apf_ctrl) + APF_PKTID_OFST);
+
+	/* APF_CMD_CHANGE will set correspond pktid, otherwise set to NOT_USED */
+	_os_mem_set(hal_to_drvpriv(hal_info), pktids, 0xFF, APF_PKTID_NUM);
+	apf_ctrl->apf_prog_size = 0;
+	apf_ctrl->apf_prog_frag_num = 0;
+	if (apf_ctrl->apf_cmd == PHL_APF_CMD_CHANGE) {
+#ifdef CONFIG_PHL_APF_DBG
+		PHL_INFO("%s() APF RAM change with machdr_chg(%u)\n", __func__, info->mac_chg);
+#endif
+		if (info->mac_chg) {
+			pktids[0] = info->apf_ram_frag_pktid[0];
+		}
+
+		apf_ctrl->apf_prog_frag_num = info->ram_frag_num;
+		/* apf_ram_frag_pktid[1:4] */
+		for (i = 1; i <= apf_ctrl->apf_prog_frag_num; i++) {
+			pktids[i] = info->apf_ram_frag_pktid[i];
+		}
+		apf_ctrl->apf_prog_size = info->ram.prog_len;
+
+		info->mac_chg = 0;
+	}
+
+#ifdef CONFIG_PHL_APF_DBG
+	PHL_INFO("[APFDBG] (%s)\n",  __func__);
+	PHL_INFO("     ===== [apf_ctrl] =====\n");
+	PHL_INFO("apf_cmd(%s) apf_prog_frag_num(%u) apf_prog_size(%u) apf_ram_size(%u)\n",
+		 _apf_cmd_to_str(apf_ctrl->apf_cmd), apf_ctrl->apf_prog_frag_num, apf_ctrl->apf_prog_size, apf_ctrl->apf_ram_size);
+	PHL_INFO("pairwise_sec(%u) group_sec(%u) hw_aes_iv(%u)\n",
+		 apf_ctrl->pairwise_sec_algo, apf_ctrl->group_sec_algo, apf_ctrl->hw_aes_iv);
+	PHL_INFO("mac_pktid(%02X) apf_pktid1(%02X) apf_pktid2(%02X) apf_pktid3(%02X)\n",
+		 apf_ctrl->mac_pktid, apf_ctrl->apf_pktid1, apf_ctrl->apf_pktid2, apf_ctrl->apf_pktid3);
+	PHL_INFO("apf_pktid4(%02X) apf_pktid5(%02X) apf_pktid6(%02X) apf_pktid7(%02X)\n",
+		 apf_ctrl->apf_pktid4, apf_ctrl->apf_pktid5, apf_ctrl->apf_pktid6, apf_ctrl->apf_pktid7);
+#endif
+#ifdef CONFIG_PHL_APF_DUMMY_MAC
+	PHL_INFO("%s() DUMMY MAC\n", __func__);
+	if (info->apf_cmd != PHL_APF_CMD_REPORT && info->apf_cmd != PHL_APF_CMD_CLEAR &&
+	    info->apf_cmd != PHL_APF_CMD_CHANGE)
+		info->apf_state = (enum phl_apf_state)info->apf_cmd;
+
+	goto exit;
+#endif
+	if (hal_mac_ops->apf_ofld_ctrl) {
+		mac_err = hal_mac_ops->apf_ofld_ctrl(mac, apf_ctrl, info->fw_mode);
+		if (mac_err != MACSUCCESS) {
+			PHL_ERR("mac_apf_ofld_ctrl fail(%u)\n", mac_err);
+			hstatus = RTW_HAL_STATUS_MAC_API_FAILURE;
+			goto exit;
+		}
+	} else {
+		PHL_ERR("mac_apf_ofld is NULL\n");
+		hstatus = RTW_HAL_STATUS_MAC_API_FAILURE;
+		goto exit;
+	}
+
+	hstatus = _hal_mac_cfg_check_proxy_done(hal_info, &fw_ret);
+	if (hstatus != RTW_HAL_STATUS_SUCCESS) {
+		PHL_ERR("%s : check proxy done fail fw_ret(%u)\n", __func__, fw_ret);
+		hstatus = RTW_HAL_STATUS_FAILURE;
+		goto exit;
+	}
+
+exit:
+	return hstatus;
+}
+#endif /* CONFIG_PHL_APF */
 #endif /* CONFIG_WOWLAN */
 
 #define MAX_POLLING_FW_STS_TIME 100 /* ms */
@@ -6743,11 +6924,11 @@ enum rtw_hal_status rtw_hal_mac_pkt_update_ids(struct hal_info_t *hal,
 	u32 status;
 
 	mac_ids.macid = (u8)entry->macid;
-	mac_ids.probersp = entry->pkt_info[PKT_TYPE_PROBE_RSP].id;
-	mac_ids.pspoll = entry->pkt_info[PKT_TYPE_PS_POLL].id;
-	mac_ids.nulldata = entry->pkt_info[PKT_TYPE_NULL_DATA].id;
-	mac_ids.qosnull = entry->pkt_info[PKT_TYPE_QOS_NULL].id;
-	mac_ids.cts2self = entry->pkt_info[PKT_TYPE_CTS2SELF].id;
+	mac_ids.probersp = entry->pkt_info[PKT_TYPE_PROBE_RSP][0].id;
+	mac_ids.pspoll = entry->pkt_info[PKT_TYPE_PS_POLL][0].id;
+	mac_ids.nulldata = entry->pkt_info[PKT_TYPE_NULL_DATA][0].id;
+	mac_ids.qosnull = entry->pkt_info[PKT_TYPE_QOS_NULL][0].id;
+	mac_ids.cts2self = entry->pkt_info[PKT_TYPE_CTS2SELF][0].id;
 
 	PHL_PRINT("macid %d, probersp %d, pspoll %d, nulldata %d, qosnull %d, cts2self %d.\n",
 		mac_ids.macid,
@@ -7152,7 +7333,8 @@ const u8 _mac_hidden_max_bw_to_hal_bw_cap[MAC_HIDDEN_MAX_BW_NUM] = {
 	(BW_CAP_160M | BW_CAP_80M | BW_CAP_40M | BW_CAP_20M | BW_CAP_10M | BW_CAP_5M),
 	(BW_CAP_320M | BW_CAP_160M | BW_CAP_80M | BW_CAP_40M | BW_CAP_20M | BW_CAP_10M | BW_CAP_5M),
 };
-#define mac_hidden_max_bw_to_hal_bw_cap(max_bw) (((max_bw) >= MAC_HIDDEN_MAX_BW_NUM) ? 0 : _mac_hidden_max_bw_to_hal_bw_cap[(max_bw)])
+#define mac_hidden_max_bw_to_hal_bw_cap(max_bw) (((max_bw) >= MAC_HIDDEN_MAX_BW_NUM) ? \
+				_mac_hidden_max_bw_to_hal_bw_cap[(MAC_HIDDEN_MAX_BW_NUM-1)] : _mac_hidden_max_bw_to_hal_bw_cap[(max_bw)])
 
 #define MAC_HIDDEN_PROTOCOL_NUM 5
 const u8 _mac_hidden_proto_to_hal_proto_cap[MAC_HIDDEN_PROTOCOL_NUM] = {
@@ -7162,7 +7344,8 @@ const u8 _mac_hidden_proto_to_hal_proto_cap[MAC_HIDDEN_PROTOCOL_NUM] = {
 	(WLAN_MD_11AX | WLAN_MD_11AC | WLAN_MD_11N | WLAN_MD_11G | WLAN_MD_11A | WLAN_MD_11B),
 	(WLAN_MD_11BE | WLAN_MD_11AX | WLAN_MD_11AC | WLAN_MD_11N | WLAN_MD_11G | WLAN_MD_11A | WLAN_MD_11B),
 };
-#define mac_hidden_proto_to_hal_proto_cap(proto) (((proto) >= MAC_HIDDEN_PROTOCOL_NUM) ? 0 : _mac_hidden_proto_to_hal_proto_cap[(proto)])
+#define mac_hidden_proto_to_hal_proto_cap(proto) (((proto) >= MAC_HIDDEN_PROTOCOL_NUM) ? \
+				_mac_hidden_proto_to_hal_proto_cap[(MAC_HIDDEN_PROTOCOL_NUM-1)] : _mac_hidden_proto_to_hal_proto_cap[(proto)])
 
 
 enum rtw_hal_status
@@ -9693,7 +9876,7 @@ void _hal_max_ax_snd_cmd_wd(struct mac_ax_snd_wd_para *mac_wd,
 	PHL_TRACE(COMP_PHL_SOUND, _PHL_INFO_, "<== _hal_max_ax_snd_cmd_wd \n");
 }
 
-
+#ifdef CONFIG_PHL_BEAMFORM
 enum rtw_hal_status
 hal_mac_ax_send_fw_snd(struct hal_info_t *hal_info,
 		       struct hal_ax_fwcmd_snd *hal_cmd)
@@ -9771,7 +9954,7 @@ hal_mac_ax_send_fw_snd(struct hal_info_t *hal_info,
 
 	return hstatus;
 }
-
+#endif
 
 
 enum rtw_hal_status
@@ -10128,6 +10311,11 @@ u32 rtw_hal_mac_process_c2h(void *hal, struct rtw_c2h_info *c2h, struct c2h_evt_
 		_hal_mac_process_usr_tx_rpt(hal, &c2h_rpt.u.usr_tx_rpt);
 		break;
 #endif /*CONFIG_PHL_CUSTOM_FRAME_STAT*/
+#ifdef CONFIG_PHL_APF_DBG
+	case MSG_EVT_APF_RPT_DONE:
+		PHL_INFO("[APFDBG] %s() MSG_EVT_APF_RPT_DONE\n", __func__);
+		break;
+#endif
 	}
 exit:
 	return retid;

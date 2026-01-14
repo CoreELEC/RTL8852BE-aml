@@ -106,7 +106,8 @@ rtw_phl_snd_add_grp(void *phl,
 		if (RTW_FW_AP == phl_info->phl_com->fw_info.fw_type) {
 			snd_grp->snd_type = (he ? PHL_SND_TYPE_HE_SW : PHL_SND_TYPE_VHT_SW);
 		} else if ((RTW_FW_NIC == phl_info->phl_com->fw_info.fw_type) ||
-		           (RTW_FW_WOWLAN == phl_info->phl_com->fw_info.fw_type)) {
+		           (RTW_FW_WOWLAN == phl_info->phl_com->fw_info.fw_type) ||
+				   (RTW_FW_WOWLAN_CE == phl_info->phl_com->fw_info.fw_type)) {
 			if (num_sta > 1)
 				break;
 			snd_grp->snd_type = (he ? PHL_SND_TYPE_HE_HW : PHL_SND_TYPE_VHT_HW);
@@ -971,6 +972,8 @@ phl_snd_cal_mu_grp_bitmap(struct phl_info_t *phl_info, struct phl_snd_grp *grp)
 			/* secondary sta MU Entry Idx */
 			bfmu_idx_tmp = rtw_hal_bf_get_sumu_idx(phl_info->hal,
 						tmp_sta->bf_entry);
+			if (bfmu_idx_tmp >= 64)
+				continue; /* cannot get bfmu idx*/
 
 			/* Default set group bit enable = 1 */
 			/* grp bitmap doesn't include self */
@@ -982,7 +985,7 @@ phl_snd_cal_mu_grp_bitmap(struct phl_info_t *phl_info, struct phl_snd_grp *grp)
 			 *  MU_5 : MU_0  MU_1  MU_2  MU_3  MU_4
 			 **/
 
-			if (bfmu_idx_tmp > bfmu_idx) {
+			if ((bfmu_idx_tmp > bfmu_idx) && (bfmu_idx_tmp >= 1)) {
 				psta_info->hal_sta->mugrp_bmp |=
 							BIT(bfmu_idx_tmp - 1);
 			} else {
@@ -1221,8 +1224,8 @@ _phl_snd_proc_fw_cmd_he_tb_4sta(struct phl_info_t *phl_info,
 			sta_info,
 			f_ru_tbl[1],
 			1,
-			(bfrp_num == 1) ? 0 : 0,
-			(bfrp_num == 1) ? 1 : 1);
+			0,
+			1);
 	/*get third sta*/
 	sta_info = rtw_phl_get_stainfo_by_macid(phl_info, grp->sta[2].macid);
 

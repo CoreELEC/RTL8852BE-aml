@@ -259,23 +259,11 @@ SHALL not lock up more than one locks at a time!
 
 */
 
-
-#define traffic_threshold	10
-#define	traffic_scan_period	500
-
 typedef struct _RT_LINK_DETECT_T {
-	u32				NumTxOkInPeriod;
-	u32				NumRxOkInPeriod;
-	u32				NumRxUnicastOkInPeriod;
+	u32			NumTxOkInPeriod;
+	u32			NumRxOkInPeriod;
+	u32			NumRxUnicastOkInPeriod;
 	BOOLEAN			bBusyTraffic;
-	BOOLEAN			bTxBusyTraffic;
-	BOOLEAN			bRxBusyTraffic;
-	BOOLEAN			bHigherBusyTraffic; /* For interrupt migration purpose. */
-	BOOLEAN			bHigherBusyRxTraffic; /* We may disable Tx interrupt according as Rx traffic. */
-	BOOLEAN			bHigherBusyTxTraffic; /* We may disable Tx interrupt according as Tx traffic. */
-	/* u8 TrafficBusyState; */
-	u8 TrafficTransitionCount;
-	u32 LowPowerTransitionCount;
 } RT_LINK_DETECT_T, *PRT_LINK_DETECT_T;
 
 #ifdef CONFIG_WFD
@@ -451,7 +439,10 @@ enum {
 	RTW_ROAM_ON_RESUME = BIT1,
 	RTW_ROAM_ACTIVE = BIT2,
 	RTW_ROAM_QUICK_SCAN = BIT3,
-	RTW_ROAM_BTM = BIT4,
+	RTW_ROAM_ACTIVE_INTERVAL_EXT = BIT4,
+	RTW_ROAM_BTM_IGNORE_DELTA = BIT5,
+	RTW_ROAM_ACTIVE_IGNORE_CHK = BIT6,
+	RTW_ROAM_BTM = BIT7
 };
 
 #define UNASOC_STA_SRC_RX_BMC		0
@@ -520,6 +511,10 @@ struct link_mlme_priv {
 
 	/* bcn check info */
 	struct beacon_keys cur_beacon_keys; /* save current beacon keys */
+#ifdef CONFIG_BCN_CNT_CONFIRM_HDL
+	struct beacon_keys new_beacon_keys; /* save new beacon keys */
+	u8 new_beacon_cnts; /* if new_beacon_cnts >= threshold, ap beacon is changed */
+#endif
 #ifdef PRIVATE_R
 	_queue idle_dis_bcn_queue;
 	_queue busy_dis_bcn_queue;
@@ -610,14 +605,25 @@ struct mlme_priv {
 	u8 roam_scan_order[4];
 	u8 to_roam; /* roaming trying times */
 	struct wlan_network *roam_network; /* the target of active roam */
-	u8 roam_flags;
-	u8 roam_rssi_diff_th; /* rssi difference threshold for active scan candidate selection */
+	u16 roam_flags;
+#ifdef PRIVATE_N
+	u8 roam_idle_rssi_delta; /* idle rssi delta for active scan candidate selection */
+	u8 roam_busy_rssi_delta; /* busy rssi delta for active scan candidate selection */
+	u8 roam_idle_rssi_th;
+	u8 roam_busy_rssi_th;
+#else
+	u8 roam_rssi_delta; /* rssi delta for active scan candidate selection */
+	u8 roam_rssi_th;
+#endif
 	u32 roam_scan_int; 		/* scan interval for active roam (Unit:2 second)*/
 	u32 roam_scanr_exp_ms; /* scan result expire time in ms  for roam */
 	u8 roam_tgt_addr[ETH_ALEN]; /* request to roam to speicific target without other consideration */
-	u8 roam_rssi_threshold;
+	u8 roam_from_addr[ETH_ALEN];
+	u8 roam_scan_count;
+	u8 roam_freeze_rssi;
 	systime last_roaming;
 	bool need_to_roam;
+	bool roam_buf_pkt;
 #endif
 
 	u32 defs_lmt_sta;
@@ -1136,6 +1142,7 @@ void rtw_set_to_roam(_adapter *adapter, u8 to_roam);
 u8 rtw_dec_to_roam(_adapter *adapter);
 u8 rtw_to_roam(_adapter *adapter);
 struct wlan_network *rtw_select_roaming_candidate(struct mlme_priv *pmlmepriv);
+void rtw_wnm_candidate_info(struct wlan_network *pnetwork, struct wlan_network *cnetwork, u8 *reason);
 int rtw_check_roaming_candidate(struct mlme_priv *mlme, struct wlan_network **candidate,
 	struct wlan_network *competitor);
 #else

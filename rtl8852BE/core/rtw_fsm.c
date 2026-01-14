@@ -21,6 +21,7 @@
 
 /* #define USE_PHL_CMD_DISPR */
 
+#define MAX_OBJ_NUM 8
 #define CLOCK_NUM 3
 #define CLOCK_UNIT 10
 #define IS_CLK_OFF(clk) (clk->remain < 0) /* Negative value means disabled */
@@ -905,8 +906,6 @@ static void fsm_destory_obj(struct fsm_obj *obj)
 
 void fsm_del_obj(struct fsm_obj *obj)
 {
-	struct fsm_main *fsm = obj->fsm;
-
 	/* only allow to del an inactive obj */
 	if (obj->valid != 0) {
 		FSM_ERR_(obj->fsm, "%s: free an actived obj\n", fsm_obj_name(obj));
@@ -925,21 +924,33 @@ void fsm_deactivate_obj(struct fsm_obj *obj)
 	fsm_gen_msg(obj, NULL, 0, FSM_EV_DEL_OBJ);
 }
 
+#if 0
 bool fsm_is_alarm_off_ext(struct fsm_obj *obj, u8 id)
 {
 	struct fsm_clocks *clocks = obj->clocks;
 	struct fsm_clk *clk = &clocks->clk[id];
+	bool is_clk_off;
 
-	return IS_CLK_OFF(clk);
+	_rtw_spinunlock_bh(&obj->fsm->clk_queue.lock);
+	is_clk_off = IS_CLK_OFF(clk);
+	_rtw_spinunlock_bh(&obj->fsm->clk_queue.lock);
+
+	return is_clk_off;
 }
 
 bool fsm_is_alarm_off(struct fsm_obj *obj)
 {
 	struct fsm_clocks *clocks = obj->clocks;
 	struct fsm_clk *clk = &clocks->clk[0];
+	bool is_clk_off;
 
-	return IS_CLK_OFF(clk);
+	_rtw_spinunlock_bh(&obj->fsm->clk_queue.lock);
+	is_clk_off = IS_CLK_OFF(clk);
+	_rtw_spinunlock_bh(&obj->fsm->clk_queue.lock);
+
+	return is_clk_off;
 }
+#endif
 
 static void _fsm_set_alarm(struct fsm_obj *obj, int ms,
 	u16 event, u8 id, void *priv)
@@ -981,6 +992,7 @@ static void _fsm_set_alarm(struct fsm_obj *obj, int ms,
  *	remain time does not less than 'ms'
  * @id: alarm id; start from 1
  */
+#if 0
 void fsm_extend_alarm_ext(struct fsm_obj *obj, int ms, u8 id)
 
 {
@@ -1000,6 +1012,7 @@ void fsm_extend_alarm_ext(struct fsm_obj *obj, int ms, u8 id)
 	remain = MAX((int)rtw_fsm_time_left(clk->start, clk->end), ms);
 	fsm_set_alarm_ext(obj, remain, clk->event, id, clk->priv);
 }
+#endif
 
 /* For EXTERNAL application to setup alarm (expose)
  *
@@ -1072,6 +1085,7 @@ void fsm_cancel_alarm_ext(struct fsm_obj *obj, u8 id)
 	_fsm_cancel_alarm(obj, id);
 }
 
+#if 0
 static void _fsm_pause_alarm(struct fsm_obj *obj, u8 id)
 {
 	struct fsm_clocks *clocks = obj->clocks;
@@ -1081,7 +1095,9 @@ static void _fsm_pause_alarm(struct fsm_obj *obj, u8 id)
 	clk[id].pause = 1;
 	_rtw_spinunlock_bh(&obj->fsm->clk_queue.lock);
 }
+#endif
 
+#if 0
 /* For EXTERNAL application to pause alarm (expose)
  *
  * @obj: obj param when calling FSM framework function
@@ -1141,6 +1157,7 @@ void fsm_resume_alarm_ext(struct fsm_obj *obj, u8 id)
 	}
 	_fsm_resume_alarm(obj, id);
 }
+#endif
 
 /* For EXTERNAL application to change state (expose)
  *
@@ -1564,22 +1581,81 @@ msg_fail:
 	return _FAIL;
 }
 
+static void fsm_ucast_msg(struct fsm_priv *fsmpriv,
+	struct sta_info *psta, char *pbuf, u32 sz, u16 event)
+{
+	struct fsm_root *root = fsmpriv->root;
+	struct fsm_main *fsm;
+	struct fsm_obj *obj;
+	struct fsm_obj *obj_ary[MAX_OBJ_NUM];
+	int i, obj_num = 0;
+
+	if (!psta)
+		return;
+
+	memset(obj_ary, 0, sizeof(obj_ary));
+
+	list_for_each_entry(fsm, &root->q_share_thd.q, list) {
+		if (fsm_status(fsm) != FSM_STATUS_ENABLE)
+			continue;
+
+		_rtw_spinlock_bh(&fsm->obj_queue.lock);
+		list_for_each_entry(obj, &fsm->obj_queue.q, list) {
+			if (obj->psta == psta) {
+				obj_ary[obj_num++] = obj;
+				if (obj_num >= MAX_OBJ_NUM) {
+					FSM_WARN_(obj->fsm, "obj num exceed, event %04x(%s)\n",
+						event, fsm_evt_name(obj->fsm, event));
+					_rtw_spinunlock_bh(&fsm->obj_queue.lock);
+					goto done;
+				}
+			}
+		}
+		_rtw_spinunlock_bh(&fsm->obj_queue.lock);
+	}
+done:
+	for (i = 0; i < obj_num; i++)
+		fsm_gen_msg(obj_ary[i], pbuf, sz,  event);
+}
+
+#if 0
 static void fsm_bcast_msg(struct fsm_priv *fsmpriv,
 	struct sta_info *psta, char *pbuf, u32 sz, u16 event)
 {
 	struct fsm_root *root = fsmpriv->root;
 	struct fsm_main *fsm;
 	struct fsm_obj *obj;
+	struct fsm_obj *obj_ary[MAX_OBJ_NUM];
+	int i, obj_num = 0;
+
+	if (!psta)
+		return;
+
+	memset(obj_ary, 0, sizeof(obj_ary));
 
 	list_for_each_entry(fsm, &root->q_share_thd.q, list) {
 		if (fsm_status(fsm) != FSM_STATUS_ENABLE)
 			continue;
+
+		_rtw_spinlock_bh(&fsm->obj_queue.lock);
 		list_for_each_entry(obj, &fsm->obj_queue.q, list) {
 			if (!psta || (psta && obj->psta == psta))
-				fsm_gen_msg(obj, pbuf, sz,  event);
+				obj_ary[obj_num++] = obj;
+				if (obj_num > MAX_OBJ_NUM) {
+					FSM_WARN_(obj->fsm, "obj num exceed, event %04x(%s)\n",
+						event, fsm_evt_name(obj->fsm, event));
+					_rtw_spinunlock_bh(&fsm->obj_queue.lock);
+					goto done;
+				}
+			}
 		}
+		_rtw_spinunlock_bh(&fsm->obj_queue.lock);
 	}
+done:
+	for (i = 0; i < obj_num; i++)
+		fsm_gen_msg(obj_ary[i], pbuf, sz,  event);
 }
+#endif
 
 void rtw_fsm_notify_connect(struct fsm_priv *fsmpriv, struct sta_info *psta, int res)
 {
@@ -1588,9 +1664,9 @@ void rtw_fsm_notify_connect(struct fsm_priv *fsmpriv, struct sta_info *psta, int
 
 	pself = rtw_get_stainfo(&a->stapriv, a->phl_role->mac_addr);
 	if (res >= 0) /* success */
-		fsm_bcast_msg(fsmpriv, pself, (char *)psta, 0, FSM_EV_CONNECTED);
+		fsm_ucast_msg(fsmpriv, pself, (char *)psta, 0, FSM_EV_CONNECTED);
 	else
-		fsm_bcast_msg(fsmpriv, pself, (char *)psta, 0, FSM_EV_CONNECT_FAIL);
+		fsm_ucast_msg(fsmpriv, pself, (char *)psta, 0, FSM_EV_CONNECT_FAIL);
 }
 
 void rtw_fsm_notify_disconnect(struct fsm_priv *fsmpriv, struct sta_info *psta)
@@ -1600,17 +1676,17 @@ void rtw_fsm_notify_disconnect(struct fsm_priv *fsmpriv, struct sta_info *psta)
 
 	pself = rtw_get_stainfo(&a->stapriv, a->phl_role->mac_addr);
 	if (pself)
-		fsm_bcast_msg(fsmpriv, psta, (char *)pself, 0, FSM_EV_DISCONNECTED);
+		fsm_ucast_msg(fsmpriv, psta, (char *)pself, 0, FSM_EV_DISCONNECTED);
 }
 
 void rtw_fsm_notify_scan_start(struct fsm_priv *fsmpriv, struct sta_info *psta)
 {
-	fsm_bcast_msg(fsmpriv, psta, NULL, 0, FSM_EV_SCAN_START);
+	fsm_ucast_msg(fsmpriv, psta, NULL, 0, FSM_EV_SCAN_START);
 }
 
 void rtw_fsm_notify_scan_done(struct fsm_priv *fsmpriv, struct sta_info *psta)
 {
-	fsm_bcast_msg(fsmpriv, psta, NULL, 0, FSM_EV_SCAN_DONE);
+	fsm_ucast_msg(fsmpriv, psta, NULL, 0, FSM_EV_SCAN_DONE);
 }
 
 /** Debug funcitons

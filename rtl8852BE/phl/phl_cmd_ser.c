@@ -41,7 +41,7 @@ enum _CMD_SER_TIMER_STATE {
 	CMD_SER_SKIP_CHK = BIT8,
 };
 
-#define CMD_SER_FW_TIMEOUT 1000 /* ms */
+#define CMD_SER_FW_TIMEOUT 3000 /* ms */
 #define CMD_SER_POLLING_INTERVAL 10 /* ms */
 #define CMD_SER_USB_POLLING_INTERVAL_IDL 1000 /* ms */
 #define CMD_SER_USB_POLLING_INTERVAL_ACT 10 /* ms */
@@ -647,11 +647,6 @@ static void _ser_msg_hdl_m1(struct cmd_ser *cser)
 	rtw_hal_ser_int_cfg(phl_info->hal, phl_info->phl_com, RTW_PHL_SER_M1_POST_CFG);
 }
 
-static void _ser_msg_hdl_fw_expire(struct cmd_ser *cser)
-{
-	/* do nothing, expect FW WDT will happened */
-}
-
 static void _ser_msg_hdl_m3(struct cmd_ser *cser)
 {
 	struct phl_info_t *phl_info = cser->phl_info;
@@ -722,6 +717,12 @@ static void _ser_msg_hdl_l2_reset_done(struct cmd_ser *cser)
 		cser->bserl2 = false;
 	else
 		PHL_WARN("Ser L2 state not set!\n");
+}
+
+static void _ser_msg_hdl_fw_expire(struct cmd_ser *cser)
+{
+	/* trigger ser l2 flow if ser l1 timeout */
+	_ser_msg_hdl_m9(cser);
 }
 
 enum phl_mdl_ret_code

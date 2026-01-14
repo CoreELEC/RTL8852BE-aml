@@ -511,7 +511,7 @@ struct tx_local_buf {
 	void *os_priv;
 #ifdef RTW_TX_COALESCE_BAK_PKT_LIST
 	u8 pkt_cnt;
-	struct rtw_pkt_buf_list pkt_list[0];
+	struct rtw_pkt_buf_list pkt_list[];
 #endif
 };
 

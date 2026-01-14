@@ -93,6 +93,7 @@ enum rtw_hal_status {
 #define FW_FILE_NIC_POSTFIX ""
 #define FW_FILE_NIC_CE_POSTFIX "_ce"
 #define FW_FILE_WOWLAN_POSTFIX "_wowlan"
+#define FW_FILE_WOWLAN_CE_POSTFIX "_wowlan_ce"
 #define FW_FILE_SPIC_POSTFIX "_spic"
 #define FW_FILE_AP_POSTFIX "_ap"
 
@@ -1154,10 +1155,12 @@ struct pkt_ofld_info {
 	u8 id;
 };
 
+/* Up to 8 add_pkt_ofld are allowed for the same type */
+#define PKT_OFLD_MAX_VAL 8
 struct pkt_ofld_entry {
 	struct list_head list;
 	u16 macid;
-	struct pkt_ofld_info pkt_info[PKT_OFLD_TYPE_MAX];
+	struct pkt_ofld_info pkt_info[PKT_OFLD_TYPE_MAX][PKT_OFLD_MAX_VAL];
 };
 
 enum rtw_c2h_cat {
@@ -1243,6 +1246,9 @@ struct rtw_hal_wow_cfg {
 	struct rtw_pattern_match_info *pattern_match_info;
 	struct rtw_wow_gpio_info *wow_gpio;
 	struct rtw_periodic_wake_info *periodic_wake_cfg;
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+	struct rtw_mdns_ofld_info *mdns_ofld_info;
+#endif
 };
 #endif /* CONFIG_WOWLAN */
 

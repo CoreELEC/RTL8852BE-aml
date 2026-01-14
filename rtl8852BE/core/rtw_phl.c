@@ -29,7 +29,7 @@ static enum phl_cmd_type rtw_cmdf_to_phl_cmd_type(u8 flag)
 static const char *const _band_cap_str[] = {
 	/* BIT0 */"2G",
 	/* BIT1 */"5G",
-	/* BIT2 */"6G",	
+	/* BIT2 */"6G",
 };
 
 static const char *const _bw_cap_str[] = {
@@ -114,7 +114,7 @@ void rtw_hw_dump_hal_spec(void *sel, struct dvobj_priv *dvobj)
 			_RTW_PRINT_SEL(sel, "%s ", _wl_func_str[i]);
 	}
 	_RTW_PRINT_SEL(sel, "\n");
-	
+
 #if 0 /*GEORGIA_TODO_FIXIT*/
 
 	RTW_PRINT_SEL(sel, "%s pg_txpwr_saddr:0x%X\n", hw_cap_str, hal_spec->pg_txpwr_saddr);
@@ -123,7 +123,7 @@ void rtw_hw_dump_hal_spec(void *sel, struct dvobj_priv *dvobj)
 }
 
 void rtw_dump_phl_sta_info(void *sel, struct sta_info *sta)
-{	
+{
 	struct rtw_phl_stainfo_t *phl_sta = sta->phl_sta;
 	char mac_addr_str[MAC_FMT_LEN];
 
@@ -235,7 +235,7 @@ inline u8 rtw_hw_get_wireless_mode(struct dvobj_priv *dvobj)
 		wireless_mode |= WLAN_MD_11AX;
 	}
 	#endif
-	
+
 	return wireless_mode;
 }
 
@@ -301,6 +301,7 @@ void rtw_hw_deinit(struct dvobj_priv *dvobj)
 		rtw_phl_trx_free(dvobj->phl);
 		rtw_core_deregister_phl_msg(dvobj);
 		rtw_phl_watchdog_deinit(dvobj->phl);
+		rtw_phl_regu_interface_deinit(dvobj->phl);
 		rtw_phl_deinit(dvobj->phl);
 	}
 
@@ -1416,7 +1417,9 @@ exit:
 
 struct rtw_phl_mcc_ops rtw_mcc_ops = {
 	.priv = NULL,
+#ifdef CONFIG_P2P_PS
 	.mcc_update_noa = _mcc_update_noa,
+#endif
 	.mcc_get_setting = _mcc_get_setting,
 };
 #endif
@@ -1537,6 +1540,8 @@ u8 rtw_hw_init(struct dvobj_priv *dvobj)
 
 	dvobj->phl_com = rtw_phl_get_com(dvobj->phl);
 
+	rtw_phl_regu_interface_init(dvobj->phl);
+
 	/*init sw cap from registary*/
 	rtw_core_update_default_setting(dvobj);
 
@@ -1550,7 +1555,11 @@ u8 rtw_hw_init(struct dvobj_priv *dvobj)
 		);
 	#endif
 	/*init datapath section*/
-	rtw_phl_trx_alloc(dvobj->phl);
+	phl_status = rtw_phl_trx_alloc(dvobj->phl);
+	if (phl_status != RTW_PHL_STATUS_SUCCESS) {
+		RTW_ERR("%s - rtw_phl_trx_alloc failed\n", __func__);
+		goto _free_phl;
+	}
 	rtw_core_set_phl_ops(dvobj);
 
 	rtw_core_register_phl_msg(dvobj);
@@ -1590,6 +1599,9 @@ u8 rtw_hw_init(struct dvobj_priv *dvobj)
 	rst = _SUCCESS;
 	return rst;
 
+_free_phl :
+	rtw_phl_deinit(dvobj->phl);
+	return rst;
 _free_hal :
 	rtw_hw_deinit(dvobj);
 	return rst;
@@ -1644,23 +1656,6 @@ void rtw_hw_cap_init(struct dvobj_priv *dvobj)
 	dvobj->phl_com->rf_path_num = hal_spec->rf_reg_path_num; /*GET_HAL_RFPATH_NUM*/
 	dvobj->phl_com->rf_type = RF_2T2R; /*GET_HAL_RFPATH*/
 #endif
-}
-
-
-/*
- * _ch_offset_drv2phl() - Convert driver channel offset to PHL type
- * @ch_offset:	channel offset, ref: HAL_PRIME_CHNL_OFFSET_*
- *
- * Return PHL channel offset type "enum chan_offset"
- */
-static enum chan_offset _ch_offset_drv2phl(u8 ch_offset)
-{
-	if (ch_offset == CHAN_OFFSET_UPPER)
-		return CHAN_OFFSET_UPPER;
-	if (ch_offset == CHAN_OFFSET_LOWER)
-		return CHAN_OFFSET_LOWER;
-
-	return CHAN_OFFSET_NO_EXT;
 }
 
 /*
@@ -2231,6 +2226,8 @@ int rtw_hw_add_key(struct _ADAPTER *a, struct sta_info *sta,
 		u8 spp, enum phl_cmd_type cmd_type,  u32 cmd_timeout)
 {
 	struct dvobj_priv *d;
+	struct mlme_ext_priv *pmlmeext = &(a->mlmeextpriv);
+	struct mlme_ext_info *pmlmeinfo = &pmlmeext->mlmext_info;
 	void *phl;
 	struct phl_sec_param_h crypt = {0};
 	enum rtw_phl_status status;
@@ -2239,6 +2236,9 @@ int rtw_hw_add_key(struct _ADAPTER *a, struct sta_info *sta,
 	d = adapter_to_dvobj(a);
 	phl = GET_PHL_INFO(d);
 	if (!phl)
+		return -1;
+
+	if (MLME_IS_STA(a) && (pmlmeinfo->state == WIFI_FW_NULL_STATE))
 		return -1;
 
 	if (rtw_hw_chk_sec_mode(a, sta, cmd_type, cmd_timeout) == _FAIL)
@@ -2254,8 +2254,14 @@ int rtw_hw_add_key(struct _ADAPTER *a, struct sta_info *sta,
 		return -1;
 	}
 
+	if (MLME_IS_STA(a) && (pmlmeinfo->state == WIFI_FW_NULL_STATE))
+		return -1;
 	/* delete key before adding key */
 	rtw_phl_cmd_del_key(phl, sta->phl_sta, &crypt, cmd_type, cmd_timeout);
+
+	if (MLME_IS_STA(a) && (pmlmeinfo->state == WIFI_FW_NULL_STATE))
+		return -1;
+
 	status = rtw_phl_cmd_add_key(phl, sta->phl_sta, &crypt, key, cmd_type, cmd_timeout);
 	if (status != RTW_PHL_STATUS_SUCCESS)
 		return -1;
@@ -2310,6 +2316,8 @@ int rtw_hw_del_key(struct _ADAPTER *a, struct sta_info *sta,
 int rtw_hw_del_all_key(struct _ADAPTER *a, struct sta_info *sta,
 			enum phl_cmd_type cmd_type, u32 cmd_timeout)
 {
+	struct mlme_ext_priv *pmlmeext = &(a->mlmeextpriv);
+	struct mlme_ext_info *pmlmeinfo = &pmlmeext->mlmext_info;
 	struct dvobj_priv *d;
 	void *phl;
 	u8 keyid;
@@ -2317,10 +2325,12 @@ int rtw_hw_del_all_key(struct _ADAPTER *a, struct sta_info *sta,
 	struct phl_sec_param_h crypt = {0};
 	enum rtw_phl_status status;
 
-
 	d = adapter_to_dvobj(a);
 	phl = GET_PHL_INFO(d);
 	if (!phl)
+		return -1;
+
+	if (MLME_IS_STA(a) && (pmlmeinfo->state == WIFI_FW_NULL_STATE))
 		return -1;
 
 	/* Delete Group and Pairwise key */
@@ -2778,7 +2788,11 @@ int rtw_hw_connected(struct _ADAPTER *a)
 
 		if (rtw_sta_hal_media_status_rpt_cmd(a, sta, true, RTW_CMDF_DIRECTLY) != _SUCCESS)
 			return -1;
+
 		rtw_dump_phl_sta_info(RTW_DBGDUMP, sta);
+#ifdef CONFIG_APF
+		rtw_apf_cmd_hdl(a, PHL_APF_CMD_MEDIA_STATUS_CHG);
+#endif
 
 		/* Todo: udpate capability: short preamble, slot time */
 		update_capinfo(a, alink, alink->mlmeextpriv.mlmext_info.capability);
@@ -2875,7 +2889,7 @@ int rtw_hw_disconnect(struct _ADAPTER *a, struct sta_info *sta)
 
 	/* Check and reset setting related to rx ampdu resources of PHL. */
 	for (tid = 0; tid < TID_NUM; tid++) {
-		if(sta->recvreorder_ctrl[tid].enable == _TRUE) {
+		if(sta->recvreorder_ctrl[tid].enable == _TRUE || sta->phl_sta->tid_rx[tid]) {
 			sta->recvreorder_ctrl[tid].enable =_FALSE;
 			rtw_phl_stop_rx_ba_session(phl, sta->phl_sta, tid);
 			RTW_INFO(FUNC_ADPT_FMT"stop process tid %d \n",
@@ -2893,6 +2907,9 @@ int rtw_hw_disconnect(struct _ADAPTER *a, struct sta_info *sta)
 			return -1;
 
 		rtw_dump_phl_sta_info(RTW_DBGDUMP, sta);
+#ifdef CONFIG_APF
+		rtw_apf_cmd_hdl(a, PHL_APF_CMD_MEDIA_STATUS_CHG);
+#endif
 	}
 
 	return 0;
@@ -2991,9 +3008,6 @@ u8 rtw_hal_get_def_var(struct _ADAPTER *a, struct _ADAPTER_LINK *alink,
 		/* HT only */
 		*(enum _HT_CAP_AMPDU_FACTOR*)val = MAX_AMPDU_FACTOR_64K;
 		break;
-	case HW_DEF_RA_INFO_DUMP:
-		/* do nothing */
-		break;
 	case HAL_DEF_DBG_DUMP_TXPKT:
 		*(u8*)val = 0;
 		break;
@@ -3011,6 +3025,7 @@ u8 rtw_hal_get_def_var(struct _ADAPTER *a, struct _ADAPTER_LINK *alink,
 }
 
 #ifdef RTW_DETECT_HANG
+#if defined(CONFIG_USB_HCI) || defined(CONFIG_SDIO_HCI)
 #define HANG_DETECT_THR 3
 #define MAC_RX_FULL_DROP_CHK_MAX_NUM 100
 void rtw_is_rxff_hang(_adapter *padapter, struct rxff_hang_info *prxff_hang_info)
@@ -3058,6 +3073,7 @@ void rtw_is_rxff_hang(_adapter *padapter, struct rxff_hang_info *prxff_hang_info
 	if (prxff_hang_info->rx_ff_hang_cnt >= HANG_DETECT_THR)
 		prxff_hang_info->dbg_is_rxff_hang = _TRUE;
 }
+#endif
 
 void rtw_is_fw_hang(_adapter *padapter, struct fw_hang_info *pfw_hang_info)
 {
@@ -3090,7 +3106,9 @@ void rtw_is_hang_check(_adapter *padapter)
 	struct debug_priv *pdbgpriv = &pdvobjpriv->drv_dbg;
 	struct hang_info *phang_info = &pdbgpriv->dbg_hang_info;
 	/* struct fw_hang_info *pfw_hang_info = &phang_info->dbg_fw_hang_info; */
+#if defined(CONFIG_USB_HCI) || defined(CONFIG_SDIO_HCI)
 	struct rxff_hang_info *prxff_hang_info = &phang_info->dbg_rxff_hang_info;
+#endif
 	struct fw_hang_info *pfw_hang_info = &phang_info->dbg_fw_hang_info;
 	u8 is_fw_in_ps_mode = _FALSE;
 	u8 is_fw_ps_awake = _TRUE;
@@ -3101,8 +3119,9 @@ void rtw_is_hang_check(_adapter *padapter)
 	if (rtw_hw_get_init_completed(pdvobjpriv) && (!is_fw_in_ps_mode) &&
 	    is_fw_ps_awake) {
 		phang_info->enter_cnt++;
-
+#if defined(CONFIG_USB_HCI) || defined(CONFIG_SDIO_HCI)
 		rtw_is_rxff_hang(padapter, prxff_hang_info);
+#endif
 		rtw_is_fw_hang(padapter, pfw_hang_info);
 	}
 }
@@ -3205,7 +3224,7 @@ void rtw_dump_env_rpt(struct _ADAPTER *a, void *sel)
 	struct _ADAPTER_LINK *alink = GET_PRIMARY_LINK(a);
 
 	rtw_phl_get_env_rpt(phl, &rpt, alink->wrlink->hw_band);
-	
+
 	RTW_PRINT_SEL(sel, "tx_ratio:%d (%%)\n", rpt.nhm_tx_ratio);
 	RTW_PRINT_SEL(sel, "clm_ratio:%d (%%)\n", rpt.nhm_cca_ratio);
 	RTW_PRINT_SEL(sel, "nhm_ratio:%d (%%)\n", rpt.nhm_ratio);
@@ -3377,7 +3396,11 @@ static u8 _cfg_arp_ofld_info(struct _ADAPTER *a)
 	phl = GET_PHL_INFO(d);
 	_rtw_memset(&info, 0, sizeof(struct rtw_arp_ofld_info));
 
+#ifdef CONFIG_APF
+	info.arp_en = 0;
+#else
 	info.arp_en = 1;
+#endif
 
 	if (info.arp_en) {
 		/* Sender IP address */
@@ -3451,6 +3474,9 @@ static u8 _cfg_ndp_ofld_info(struct _ADAPTER *a)
 
 	_rtw_memset(&info, 0, sizeof(struct rtw_ndp_ofld_info));
 
+#ifdef CONFIG_APF
+	info.ndp_en = 0;
+#endif
 	rtw_phl_cfg_ndp_ofld_info(phl, &info);
 
 	return _SUCCESS;
@@ -3524,6 +3550,38 @@ static u8 _cfg_gtk_ofld_info(struct _ADAPTER *a)
 }
 #endif
 
+#ifdef CONFIG_MDNS_OFFLOAD
+static u8 _cfg_mdns_ofld_info(struct _ADAPTER *a)
+{
+	struct dvobj_priv *d;
+	void *phl;
+	struct mlme_ext_priv *pmlmeext = &(a->mlmeextpriv);
+	struct mlme_ext_info *pmlmeinfo = &pmlmeext->mlmext_info;
+	struct wow_priv *wowpriv = adapter_to_wowlan(a);
+	struct rtw_mdns_ofld_info *info = &wowpriv->mdns_ofld_info;
+
+	d = adapter_to_dvobj(a);
+	phl = GET_PHL_INFO(d);
+	
+	info->mdns_en = (info->offload_state) ? true : false;
+
+	if (info->mdns_en) {
+		/* Sender IP address */
+		if (!is_all_null(pmlmeinfo->ip_addr, RTW_IP_ADDR_LEN))
+			_rtw_memcpy(info->mdns_ipv4_header.src_ipv4_addr,
+			            pmlmeinfo->ip_addr, IPV4_ADDRESS_LENGTH);
+#ifdef CONFIG_IPV6
+		if (!is_all_null(pmlmeinfo->ip6_addr, RTW_IPv6_ADDR_LEN))
+			_rtw_memcpy(info->mdns_ipv6_header.src_ipv6_addr,
+			            pmlmeinfo->ip6_addr, IPV6_ADDRESS_LENGTH);
+#endif
+	}
+	rtw_phl_cfg_mdns_ofld_info(phl, info);
+
+	return _SUCCESS;
+}
+#endif /* CONFIG_MDNS_OFFLOAD */
+
 static u8 _cfg_realwow_info(struct _ADAPTER *a)
 {
 	struct rtw_realwow_info info;
@@ -3572,11 +3630,17 @@ static u8 _cfg_wow_wake(struct _ADAPTER *a, u8 wow_en)
 	else
 		wow_wake_event.deauth_wakeup = _FALSE;
 	/* wake up by pattern match packet */
-	if (registry_par->wakeup_event & (BIT(1) | BIT(3))) {
+	if ((registry_par->wakeup_event & (BIT(1) | BIT(3)))
+#ifdef CONFIG_GOOGLE_CAST_WAKEUP
+		|| _TRUE
+#endif
+	) {
 		wow_wake_event.pattern_match_en = _TRUE;
 
 		rtw_wow_pattern_clean(a, RTW_DEFAULT_PATTERN);
-
+#ifdef CONFIG_GOOGLE_CAST_WAKEUP
+		rtw_set_google_cast_mdns_wow_pattern(a);
+#endif
 		if (registry_par->wakeup_event & BIT(1))
 			rtw_set_default_pattern(a);
 
@@ -3761,6 +3825,10 @@ static u8 _wow_cfg(struct _ADAPTER *a, u8 wow_en, u8 no_link_mode)
 			return _FAIL;
 #endif
 
+#ifdef CONFIG_MDNS_OFFLOAD
+		if (!_cfg_mdns_ofld_info(a))
+			return _FAIL;
+#endif
 		if (!_cfg_realwow_info(a))
 			return _FAIL;
 
@@ -4159,6 +4227,7 @@ void dump_txpwr_lmt(void *sel, _adapter *adapter)
 		max_regd_num = rtw_phl_get_regulation_max_num(GET_PHL_INFO(devob), band);
 
 		for (bw = 0; bw < TXPWR_LMT_MAX_BANDWIDTH_NUM; bw++) {
+			u8 (*center_chs_num)(u8);
 			u8 (*center_chs)(u8, u8);
 
 			if (!rtw_hw_is_bw_support(devob, bw))
@@ -4166,12 +4235,16 @@ void dump_txpwr_lmt(void *sel, _adapter *adapter)
 			if (band == BAND_ON_24G && bw >= CHANNEL_WIDTH_80)
 				break;
 
-			ch_num = center_chs_num_of_band[band](bw);
+			center_chs_num = center_chs_num_of_band[band];
+			center_chs = center_chs_of_band[band];
+			if (!center_chs_num || !center_chs)
+				break;
+
+			ch_num = center_chs_num(bw);
 			if (ch_num == 0) {
 				rtw_warn_on(1);
 				break;
 			}
-			center_chs = center_chs_of_band[band];
 
 			for (tlrs = TXPWR_LMT_RS_CCK; tlrs < TXPWR_LMT_RS_NUM; tlrs++) {
 
@@ -4286,14 +4359,19 @@ void dump_txpwr_lmt_ru(void *sel, _adapter *adapter)
 		max_regd_num = rtw_phl_get_regulation_max_num(GET_PHL_INFO(devob), band);
 
 		for (bw = 0; bw < TXPWR_LMT_RU_NUM; bw++) {
+			u8 (*center_chs_num)(u8);
 			u8 (*center_chs)(u8, u8);
 
-			ch_num = center_chs_num_of_band[band](CHANNEL_WIDTH_20);
+			center_chs_num = center_chs_num_of_band[band];
+			center_chs = center_chs_of_band[band];
+			if (!center_chs_num || !center_chs)
+				break;
+
+			ch_num = center_chs_num(CHANNEL_WIDTH_20);
 			if (ch_num == 0) {
 				rtw_warn_on(1);
 				break;
 			}
-			center_chs = center_chs_of_band[band];
 
 			for (tlrs = TXPWR_LMT_RS_HE; tlrs < TXPWR_LMT_RS_NUM; tlrs++) {
 

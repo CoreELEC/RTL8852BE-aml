@@ -1,0 +1,56 @@
+diff --git a/rtl8852BE/Makefile b/rtl8852BE/Makefile
+index 03b9c10..1fbc6c5 100644
+--- a/rtl8852BE/Makefile
++++ b/rtl8852BE/Makefile
+@@ -161,8 +161,8 @@ CONFIG_RTKM ?= n
+ CONFIG_RTW_DEBUG = y
+ # default log level is _DRV_INFO_ = 4,
+ # please refer to "How_to_set_driver_debug_log_level.doc" to set the available level.
+-CONFIG_RTW_LOG_LEVEL = 4
+-CONFIG_RTW_PHL_LOG_LEVEL = 4
++CONFIG_RTW_LOG_LEVEL = 3
++CONFIG_RTW_PHL_LOG_LEVEL = 3
+ 
+ # CONFIG_RTW_APPEND_LOGLEVEL decide if append kernel log level to each messages.
+ # default "n" for don't append.
+@@ -262,7 +262,7 @@ CONFIG_BCN_CNT_CONFIRM_HDL = y
+ CONFIG_BCN_NEW_MAX_CNT = 3
+ 
+ ###################### Platform Related #######################
+-CONFIG_PLATFORM_I386_PC = y
++CONFIG_PLATFORM_I386_PC = n
+ CONFIG_PLATFORM_RTL8198D = n
+ CONFIG_PLATFORM_ANDROID_X86 = n
+ CONFIG_PLATFORM_ANDROID_INTEL_X86 = n
+@@ -275,19 +275,19 @@ CONFIG_PLATFORM_AML_S905 = n
+ CONFIG_PLATFORM_AML_S905_L3A = n
+ CONFIG_PLATFORM_HUANGLONG = n
+ CONFIG_PLATFORM_ARM_ROCKCHIP = n
+-CONFIG_PLATFORM_AML_S928X = n
++CONFIG_PLATFORM_AML_S928X = y
+ CONFIG_PLATFORM_BRCM = n
+ 
+ ########################## Android ###########################
+ # CONFIG_RTW_ANDROID - 0: no Android, 10 - 16 : Android version
+-CONFIG_RTW_ANDROID = 0
++CONFIG_RTW_ANDROID = 16
+ 
+ ifeq ($(shell test $(CONFIG_RTW_ANDROID) -gt 0; echo $$?), 0)
+ EXTRA_CFLAGS += -DCONFIG_RTW_ANDROID=$(CONFIG_RTW_ANDROID)
+ CONFIG_GOOGLE_CAST_WAKEUP = n
+ 
+ # For BAZEL BUILD
+-CONFIG_GKI_BAZEL = n
++CONFIG_GKI_BAZEL = y
+ 
+ ifeq ($(CONFIG_GKI_BAZEL), y)
+ # UNUSED DUMMY INFO
+@@ -331,7 +331,7 @@ EXTRA_CFLAGS += -DCONFIG_RTW_ANDROID=$(CONFIG_RTW_ANDROID)
+ CONFIG_GOOGLE_CAST_WAKEUP = n
+ 
+ # For BAZEL BUILD
+-CONFIG_GKI_BAZEL = n
++CONFIG_GKI_BAZEL = y
+ 
+ ifeq ($(CONFIG_GKI_BAZEL), y)
+ # UNUSED DUMMY INFO

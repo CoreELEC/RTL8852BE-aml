@@ -444,8 +444,6 @@ enum rtw_hal_status hal_csi_query_idle_csi_buf(
 		_os_spinunlock(drv_priv, &csi_obj->csi_lock, _ps, NULL);
 	}
 	break;
-	default:
-	break;
 	}
 	if (tmp_csi_buf == NULL || sub_idx == CSI_BUF_SUB_IDX_NON) {
 		status = RTW_HAL_STATUS_RESOURCE;

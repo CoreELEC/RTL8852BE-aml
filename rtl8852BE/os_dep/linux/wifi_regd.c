@@ -114,6 +114,15 @@ out:
 	return wdev;
 }
 
+bool rtw_is_du_ndev(struct wiphy *wiphy, struct net_device *ndev)
+{
+	char du_ndev_name[IFNAMSIZ];
+
+	snprintf(du_ndev_name, IFNAMSIZ, "%s-du", wiphy_name(wiphy));
+
+	return strncmp(ndev->name, du_ndev_name, IFNAMSIZ) == 0;
+}
+
 void rtw_regd_free_du_wdev(struct wiphy *wiphy)
 {
 	struct dvobj_priv *dvobj = wiphy_to_dvobj(wiphy);
@@ -244,8 +253,10 @@ static struct ieee80211_reg_rule rtw_get_ieee80211_reg_rule(struct get_chplan_re
 	)
 		rule.flags |= NL80211_RRF_AUTO_BW;
 
+	#if 0 /* TODO: limit to 20MHz */
 	if (regd_max_bw < 40)
 		rule.flags |= NL80211_RRF_NO_HT40;
+	#endif
 	if (regd_max_bw < 80)
 		rule.flags |= NL80211_RRF_NO_80MHZ;
 	if (regd_max_bw < 160)
@@ -369,8 +380,6 @@ static void rtw_regd_disable_no_20mhz_chs(struct wiphy *wiphy)
 			continue;
 		for (j = 0; j < sband->n_channels; j++) {
 			ch = &sband->channels[j];
-			if (!ch)
-				continue;
 			if (ch->flags & IEEE80211_CHAN_NO_20MHZ) {
 				RTW_INFO(FUNC_WIPHY_FMT" disable band:%d ch:%u w/o 20MHz\n", FUNC_WIPHY_ARG(wiphy), ch->band, ch->hw_value);
 				ch->flags = IEEE80211_CHAN_DISABLED;
@@ -439,8 +448,6 @@ static void rtw_regd_overide_flags(struct wiphy *wiphy, struct get_chplan_resp *
 			continue;
 		for (j = 0; j < sband->n_channels; j++) {
 			ch = &sband->channels[j];
-			if (!ch)
-				continue;
 			ch->flags = IEEE80211_CHAN_DISABLED;
 		}
 	}

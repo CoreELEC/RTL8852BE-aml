@@ -759,10 +759,10 @@ int rtw_mp_txpower(struct net_device *dev,
 {
 	u32 idx_a = 0, idx_b = 0, idx_c = 0, idx_d = 0;
 	int MsetPower = 1;
-	char pout_str_buf[7];
+	char pout_str_buf[8];
 	u8		input[RTW_IWD_MAX_LEN];
 	u8 rfpath_i = 0;
-	u16 agc_cw_val = 0;
+	s16 agc_cw_val = 0;
 	_adapter *padapter = rtw_netdev_priv(dev);
 	struct _ADAPTER_LINK *padapter_link = GET_PRIMARY_LINK(padapter);
 	struct mp_priv *pmppriv = &padapter ->mppriv;
@@ -823,13 +823,15 @@ int rtw_mp_txpower(struct net_device *dev,
 				goto invalid_param_format;
 			}
 
-			pset = int_num * TX_POWER_BASE + ((dec_num * TX_POWER_BASE) / 100);
-			RTW_INFO("%s: pset=%d\n", __func__, pset);
-			pset = ((pset < 0 || signed_flag == 1) ? -pset : pset);
-
-
 			pextra += sprintf(pextra, "Set power dbm :%d.%d\n", int_num, dec_num);
+			dec_num = ((dec_num * TX_POWER_BASE) / 100);
+
+			if (signed_flag == 1 && dec_num > 0)
+				dec_num = -dec_num;
+
+			pset = int_num * TX_POWER_BASE + dec_num;
 			pmppriv->txpowerdbm = pset;
+			RTW_INFO("%s: pmppriv->txpowerdbm=%d\n", __func__, pmppriv->txpowerdbm);
 			pmppriv->bSetTxPower = 1;
 		} else {
 			pextra += sprintf(pextra, "Invalid format on line %s\n", input);
@@ -1976,8 +1978,8 @@ int rtw_mp_get_tsside(struct net_device *dev,
 	char input[RTW_IWD_MAX_LEN];
 	u8 rfpath = 0xff;
 	s8 tssi_de = 0;
-	char pout_str_buf[7];
-	char tgr_str_buf[7];
+	char pout_str_buf[8];
+	char tgr_str_buf[8];
 	u8 pout_signed_flag = 0 , tgrpwr_signed_flag = 0;
 	int int_num = 0;
 	u32 dec_num = 0;
@@ -2267,7 +2269,7 @@ int rtw_mp_mon(struct net_device *dev,
 		/*rtw_disassoc_cmd(padapter, 0, 0);*/
 		if (check_fwstate(pmlmepriv, WIFI_ASOC_STATE) == _TRUE) {
 			rtw_disassoc_cmd(padapter, 500, 0);
-			rtw_indicate_disconnect(padapter, 0, _FALSE);
+			rtw_indicate_disconnect(padapter, 0, _TRUE);
 			/*rtw_free_assoc_resources_cmd(padapter, _TRUE, 0);*/
 		}
 		sprintf(extra, "monitor mode Stop\n");

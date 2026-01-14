@@ -95,7 +95,6 @@ enum rtw_phl_status phl_disp_eng_clearance_acquire(struct phl_info_t *phl, u8 ba
 enum rtw_phl_status phl_disp_eng_clearance_release(struct phl_info_t *phl, u8 band_idx);
 enum rtw_phl_status phl_disp_eng_exclusive_ready(struct phl_info_t *phl, u8 band_idx);
 enum rtw_phl_status phl_disp_eng_notify_dev_io_status(struct phl_info_t *phl,
-                                                      u8 band_idx,
                                                       enum phl_module_id mdl_id,
                                                       bool allow_io);
 void phl_disp_eng_notify_shall_stop(struct phl_info_t *phl, bool surprise);

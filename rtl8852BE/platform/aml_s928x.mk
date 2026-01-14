@@ -24,9 +24,9 @@ endif
 #Add by amlogic
 EXTRA_CFLAGS += -w -Wno-return-type
 EXTRA_CFLAGS += $(foreach d,$(shell test -d $(KERNEL_SRC)/$(M) && find $(shell cd $(KERNEL_SRC)/$(M);pwd) -type d),$(shell echo " -I$(d)"))
-#ifeq ($(CONFIG_PCI_HCI), y)
-#EXTRA_CFLAGS += -DUSE_AML_PCIE_TEE_MEM
-#endif
+ifeq ($(CONFIG_PCI_HCI), y)
+EXTRA_CFLAGS += -DUSE_AML_PCIE_TEE_MEM
+endif
 
 ifeq ($(CONFIG_PCI_HCI), y)
 EXTRA_CFLAGS += -DCONFIG_PLATFORM_OPS

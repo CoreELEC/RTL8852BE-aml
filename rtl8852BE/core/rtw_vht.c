@@ -391,6 +391,27 @@ u32	rtw_get_dft_vht_cap_ie(_adapter *padapter, u8 *pbuf)
 	return len;
 }
 
+bool rtw_vht_is_omn_channel_width_support(enum channel_width omn_chan_width)
+{
+	return omn_chan_width != CHANNEL_WIDTH_MAX;
+}
+
+enum channel_width rtw_vht_get_omn_channel_width(struct sta_info *psta)
+{
+	enum channel_width omn_chan_width = CHANNEL_WIDTH_MAX;
+
+	if(!psta) {
+		RTW_WARN("%s: psta is null! return CHANNEL_WIDTH_MAX!\n", __func__);
+		return omn_chan_width;
+	}
+
+	if (psta->vhtpriv.notify_present) {
+		omn_chan_width =
+			GET_VHT_OPERATING_MODE_FIELD_CHNL_WIDTH(&(psta->vhtpriv.vht_op_mode_notify));
+	}
+	return omn_chan_width;
+}
+
 /* Initialized vhtpriv by PHL default setting */
 void rtw_vht_get_dft_setting(_adapter *padapter,
 			struct protocol_cap_t *dft_proto_cap,
@@ -1617,7 +1638,8 @@ void rtw_check_vht_ies(_adapter *padapter, struct _ADAPTER_LINK *padapter_link,
 
 	vht_op_ie = rtw_get_ie(ies, EID_VHTOperation, &ie_len, ies_len);
 
-	rtw_update_drv_vht_cap(padapter, padapter_link, vht_cap_ie);
+	if (vht_cap_ie != NULL)
+		rtw_update_drv_vht_cap(padapter, padapter_link, vht_cap_ie);
 
 	rtw_add_ext_cap_info(pmlmepriv->ext_capab_ie_data, &(pmlmepriv->ext_capab_ie_len), OP_MODE_NOTIFICATION);
 	rtw_update_ext_cap_ie(pmlmepriv->ext_capab_ie_data, pmlmepriv->ext_capab_ie_len, pnetwork->IEs \

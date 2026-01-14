@@ -253,6 +253,7 @@ enum rtw_scan_type {
 #define RTW_MAX_NB_RPT_NUM 8
 #if defined(CONFIG_RTW_FSM_RRM) || defined(CONFIG_RTW_FSM_BTM)
 struct nb_bssid{
+	u8 band;
 	u8 ch;
 	u8 bssid[ETH_ALEN];
 };

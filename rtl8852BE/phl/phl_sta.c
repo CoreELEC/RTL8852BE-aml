@@ -2595,7 +2595,7 @@ rtw_phl_get_stainfo_by_macid(void *phl, u16 macid)
 		PHL_ERR("%s macid(%d) is invalid\n", __func__, macid);
 		return NULL;
 	}
-	_os_spinlock(phl_to_drvpriv(phl_info), &macid_ctl->lock, _bh, NULL);
+
 	if (_phl_macid_is_used(macid_ctl->used_map, macid))
 		phl_sta = macid_ctl->sta[macid];
 
@@ -2612,7 +2612,6 @@ rtw_phl_get_stainfo_by_macid(void *phl, u16 macid)
 		#endif /*CONFIG_RTW_DEBUG*/
 		#endif /* CONFIG_PHL_RELEASE_RPT_ENABLE */
 	}
-	_os_spinunlock(phl_to_drvpriv(phl_info), &macid_ctl->lock, _bh, NULL);
 
 	return phl_sta;
 }
@@ -3409,36 +3408,33 @@ static u32
 _min_tbtt(u32 tbtt1, u32 tbtt2, u32 bcn_intvl)
 {
 	u32 diff_th = (bcn_intvl * TU * 85) / 100;
-	u32 diff = 0, min = 0;
-	u32 similar_0_th = (bcn_intvl - 3) * TU;
+ 	u32 diff = 0, min = 0;
+ 	u32 wrap_threshold = (bcn_intvl - 10) * TU; /* 90TU for bcn_intvl 100TU */
 
-	if (tbtt1 > tbtt2) {
-		diff = tbtt1 - tbtt2;
-	} else {
-		diff = tbtt2 - tbtt1;
-	}
+	diff = (tbtt1 > tbtt2) ? (tbtt1 - tbtt2) : (tbtt2 - tbtt1);
+
 	if (diff > diff_th) {
-		if (tbtt1 > tbtt2)
-			/* ex: bcn_intvl = 100 TU, tbtt1 = 95TU, tbtt2 = 2 TU
-			    we consider 95 TU to be -5 TU
-			*/
-			min = tbtt1;
-		else
-			/* ex: tbtt1 = 10TU, tbtt2 = 96 TU */
-			min = tbtt2;
+		/**
+		 * bcn_intvl = 100TU
+		 * tbtt1 = 95TU, tbtt2 = 2TU, considering 95TU as -5TU -> select 95TU
+		 * tbtt1 = 10TU, tbtt2 = 96TU -> select 96TU
+		 */
+		min = (tbtt1 > tbtt2) ? tbtt1 : tbtt2;
 	} else {
-		/* ex: bcn_intvl = 100 TU, tbtt1 = 98TU, tbtt2 = 30 TU */
-		if (tbtt1 > tbtt2 && tbtt1 > similar_0_th)
+		/* bcn_intvl = 100TU, tbtt1 = 98TU, tbtt2 = 30 TU */
+		if (tbtt1 > tbtt2 && tbtt1 > wrap_threshold && tbtt2 < wrap_threshold)
 			min = tbtt1;
-		else if (tbtt2 > tbtt1 && tbtt2 > similar_0_th)
+		else if (tbtt2 > tbtt1 && tbtt2 > wrap_threshold && tbtt1 < wrap_threshold)
 			min = tbtt2;
 		else if (tbtt1 < tbtt2)
 			min = tbtt1;
 		else
 			min = tbtt2;
 	}
+
 	PHL_TRACE(COMP_PHL_DBG, _PHL_DEBUG_, "%s: tbtt1(%d), tbtt2(%d), bcn_intvl(%d), min(%d)\n",
 		__func__, tbtt1, tbtt2, bcn_intvl, min);
+
 	return min;
 }
 
@@ -3447,8 +3443,8 @@ void _phl_sta_up_bcn_offset_info(struct phl_info_t *phl,
 {
 	struct rtw_bcn_long_i *bcn_l = &bcn_i->bcn_l_i;
 	struct rtw_bcn_offset *ofst_i = &bcn_i->offset_i;
-	u32 b_intvl = bcn_i->bcn_intvl;
-	u32 offset = b_intvl * TU;
+	u32 b_intvl_us = bcn_i->bcn_intvl * TU;
+	u32 offset = b_intvl_us;
 	u16 similar_th = 2;/*Unit: TU*/
 	u64 diff = 0;
 	u8 idx = 0, jdx = 0, c_idx = 0, bidx = 0, start_idx = 0;
@@ -3471,32 +3467,32 @@ void _phl_sta_up_bcn_offset_info(struct phl_info_t *phl,
 			diff = bcn_l->info[LONG_BCN_TSF][c_idx] -
 				bcn_l->info[LONG_BCN_TSF][bidx];
 			diff = _os_division64(
-					_os_modular64(diff, b_intvl * TU), TU);
+					_os_modular64(diff, b_intvl_us), TU);
 			/*ex: diff = 99, BcnIntvl = 100, It's similar case
 			 * diff = 2, BcnIntvl = 100, It's similar case
 			 */
 			if (!((diff < similar_th) ||
-				((b_intvl - diff) < similar_th))) {
+				((bcn_i->bcn_intvl - diff) < similar_th))) {
 					continue;
 			}
 			/* init value */
-			if (offset == b_intvl * TU) {
+			if (offset == b_intvl_us) {
 				offset = (u32)bcn_l->info[LONG_BCN_TBTT][c_idx];
 			} else {
 				offset = _min_tbtt(offset,
 					(u32)bcn_l->info[LONG_BCN_TBTT][c_idx],
-					b_intvl);
+					bcn_i->bcn_intvl);
 			}
 			offset = _min_tbtt(offset,
 					(u32)bcn_l->info[LONG_BCN_TBTT][bidx],
-					b_intvl);
+					bcn_i->bcn_intvl);
 		}
 		c_idx = _get_bidx(bcn_l->num, c_idx);
 	}
-	if (offset != (b_intvl * TU)) {
+	if (offset != (b_intvl_us)) {
 		ofst_i->conf_lvl = CONF_LVL_HIGH;
 		if (ofst_i->offset !=
-		    _min_tbtt(offset, ofst_i->offset, b_intvl)) {
+		    _min_tbtt(offset, ofst_i->offset, bcn_i->bcn_intvl)) {
 			ofst_i->offset = offset;
 		}
 		goto exit;
@@ -3504,7 +3500,7 @@ void _phl_sta_up_bcn_offset_info(struct phl_info_t *phl,
 	for (idx = 0; idx < bcn_l->num; idx++) {
 		if (ofst_i->offset !=
 		    _min_tbtt((u32)bcn_l->info[LONG_BCN_TBTT][idx],
-				   ofst_i->offset, b_intvl)) {
+				   ofst_i->offset, bcn_i->bcn_intvl)) {
 			ofst_i->conf_lvl = CONF_LVL_MID;
 			ofst_i->offset = (u32)bcn_l->info[LONG_BCN_TBTT][idx];
 		} else if (ofst_i->conf_lvl < CONF_LVL_MID) {
@@ -3516,9 +3512,9 @@ exit:
 	   if offset is small, maybe impact by environment, offset < 5% bcn_intvl, we consider offset is 0
 	*/
 	if ((ofst_i->offset != 0) &&
-		(ofst_i->offset < ((b_intvl * TU * 5) / 100))) {
+		(ofst_i->offset < ((b_intvl_us * 5) / 100))) {
 		PHL_TRACE(COMP_PHL_DBG, _PHL_WARNING_, "%s: offset(%d) < (%d), set offset = 0\n",
-			__func__, ofst_i->offset, (b_intvl * TU * 5) / 100);
+			__func__, ofst_i->offset, (b_intvl_us * 5) / 100);
 		ofst_i->offset = 0;
 	}
 	PHL_TRACE(COMP_PHL_DBG, _PHL_DEBUG_, "%s: bcn num(%d), offset(%d us), conf_lvl(%d), current setting(%d us)\n",
@@ -3813,7 +3809,7 @@ _get_bcn_tracking_info(struct phl_info_t *phl, struct rtw_phl_stainfo_t *sta,
 		return;
 	}
 	min_bcn = ((WDOG_PERIOD / b_intvl) * MIN_BCN) / 100;
-	PHL_TRACE(COMP_PHL_DBG, _PHL_DEBUG_, "%s():  num_per_watchdog(%d), min_bcn(%d)\n",
+	PHL_TRACE(COMP_PHL_DBG, _PHL_INFO_, "%s():  num_per_watchdog(%d), min_bcn(%d)\n",
 			__func__, bcn_i->num_per_watchdog, min_bcn);
 	/* Rx little */
 	if (bcn_i->num_per_watchdog < min_bcn) {
@@ -3840,7 +3836,7 @@ _get_bcn_tracking_info(struct phl_info_t *phl, struct rtw_phl_stainfo_t *sta,
 	}
 	acpt_bcn = ((WDOG_PERIOD / b_intvl) * ACPT_BCN) / 100;
 	tgt_bcn = ((WDOG_PERIOD / b_intvl) * TGT_BCN) / 100;
-	PHL_TRACE(COMP_PHL_DBG, _PHL_DEBUG_, "%s(): tgt_bcn_wdg(%d), acpt_bcn_wdg(%d)\n",
+	PHL_TRACE(COMP_PHL_DBG, _PHL_INFO_, "%s(): tgt_bcn_wdg(%d), acpt_bcn_wdg(%d)\n",
 			__func__, tgt_bcn, acpt_bcn);
 	if (bcn_i->num_per_watchdog < acpt_bcn) {
 		goto _rx_middle;

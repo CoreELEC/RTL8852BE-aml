@@ -60,7 +60,7 @@ void rtw_hal_clear_interrupt(void *h);
 void rtw_hal_restore_interrupt(struct rtw_phl_com_t *phl_com, void *h);
 
 u32 rtw_hal_interrupt_handler(void *h);
-void rtw_hal_restore_rx_interrupt(void *h);
+void rtw_hal_restore_rx_imr_mask(void *h);
 #ifdef PHL_RXSC_ISR
 u16 rtw_hal_rpq_isr_check(void *hal, u8 dma_ch);
 #endif
@@ -164,6 +164,14 @@ rtw_hal_wow_cfg_nlo(void *hal, enum SCAN_OFLD_OP op, u16 mac_id,
                     u8 hw_band, u8 hw_port, struct rtw_nlo_info *cfg);
 
 enum rtw_hal_status rtw_hal_wow_dbg_dump(void *hal);
+
+#ifdef CONFIG_PHL_APF
+enum rtw_hal_status
+rtw_hal_init_apf(void *hal, struct phl_apf_info *info);
+enum rtw_hal_status
+rtw_hal_ctrl_apf(void *hal, struct phl_apf_info *info);
+#endif
+
 #endif /* CONFIG_WOWLAN */
 
 enum rtw_hal_status rtw_hal_set_sw_gpio_mode(struct rtw_phl_com_t *phl_com, void *hal, enum rtw_gpio_mode mode, u8 gpio);

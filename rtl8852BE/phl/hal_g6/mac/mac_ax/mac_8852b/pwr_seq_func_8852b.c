@@ -777,6 +777,8 @@ u32 mac_pwr_on_usb_8852b(struct mac_ax_adapter *adapter)
 u32 mac_pwr_on_pcie_8852b(struct mac_ax_adapter *adapter)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+	struct rtw_phl_com_t *phl_com = (struct rtw_phl_com_t *)adapter->phl_adapter;
+	u32 rfe_drv = (u32)phl_com->dev_cap.rfe_type;
 	u32 val32;
 	u32 ret;
 	//u16 val16;
@@ -821,11 +823,22 @@ u32 mac_pwr_on_pcie_8852b(struct mac_ax_adapter *adapter)
 	if (ret)
 		return ret;
 
-	/* 0x400[1:0] = 2'b01 and 0x400[5:4] = 2'b11*/
-	val32 = MAC_REG_R32(R_AX_SPS_DIG_OFF_CTRL0);
-	val32 = SET_CLR_WORD(val32, 0x1, B_AX_C1_L1);
-	val32 = SET_CLR_WORD(val32, 0x3, B_AX_C3_L1);
-	MAC_REG_W32(R_AX_SPS_DIG_OFF_CTRL0, val32);
+	if (rfe_drv == RFE_TYPE_05) {
+		/* 0x400[1:0] = 2'b01 and 0x400[3:2] = 2'b01*/
+		/* 0x400[5:4] = 2'b10 and 0x400[7:5] = 2'b01*/
+		val32 = MAC_REG_R32(R_AX_SPS_DIG_OFF_CTRL0);
+		val32 = SET_CLR_WORD(val32, 0x1, B_AX_C1_L1);
+		val32 = SET_CLR_WORD(val32, 0x1, B_AX_C2_L1);
+		val32 = SET_CLR_WORD(val32, 0x2, B_AX_C3_L1);
+		val32 = SET_CLR_WORD(val32, 0x1, B_AX_R1_L1);
+		MAC_REG_W32(R_AX_SPS_DIG_OFF_CTRL0, val32);
+	} else {
+		/* 0x400[1:0] = 2'b01 and 0x400[5:4] = 2'b11*/
+		val32 = MAC_REG_R32(R_AX_SPS_DIG_OFF_CTRL0);
+		val32 = SET_CLR_WORD(val32, 0x1, B_AX_C1_L1);
+		val32 = SET_CLR_WORD(val32, 0x3, B_AX_C3_L1);
+		MAC_REG_W32(R_AX_SPS_DIG_OFF_CTRL0, val32);
+	}
 
 	/* 0x04[16] = 1 */
 	val32 = MAC_REG_R32(R_AX_SYS_PW_CTRL);

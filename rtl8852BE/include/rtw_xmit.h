@@ -561,6 +561,16 @@ enum {
 	RTW_AMSDU_TIMER_SETTING,
 	RTW_AMSDU_TIMER_TIMEOUT,
 };
+
+#ifdef CONFIG_RTW_TX_AMSDU_CHK_LEN
+extern const u16 ap_cap_max_amsdu_len[];
+#define AP_CAP_MAX_AMSDU_IDX 3
+#define AP_CAP_MAX_AMSDU_LEN(val) \
+	(((val) >= AP_CAP_MAX_AMSDU_IDX) ? \
+	ap_cap_max_amsdu_len[AP_CAP_MAX_AMSDU_IDX] : \
+	ap_cap_max_amsdu_len[(val)])
+#define AMSDU_MAX_LEN(tx_amsdu) (1522 + 1524 * (tx_amsdu - 1))
+#endif
 #endif
 
 #define WLANHDR_OFFSET	64
@@ -762,6 +772,9 @@ struct tx_servq {
 	_list	tx_pending;
 	_queue	sta_pending;
 	int qcnt;
+#ifdef CONFIG_RTW_TX_AMSDU_CHK_LEN
+	int qlen;
+#endif
 };
 
 
@@ -964,7 +977,11 @@ struct	xmit_priv	{
 	u32 amsdu_debug_timeout;
 
 #ifndef AMSDU_DEBUG_MAX_COUNT
+#ifdef CONFIG_RTW_TX_AMSDU_CHK_LEN
+#define AMSDU_DEBUG_MAX_COUNT 15
+#else
 #define AMSDU_DEBUG_MAX_COUNT 5
+#endif
 #endif
 	u32 amsdu_debug_coalesce[AMSDU_DEBUG_MAX_COUNT];
 	u32 amsdu_debug_tasklet;
@@ -1133,7 +1150,12 @@ extern void rtw_amsdu_cancel_timer(_adapter *padapter, u8 priority);
 extern s32 rtw_xmitframe_coalesce_amsdu(_adapter *padapter, struct xmit_frame *pxmitframe, struct xmit_frame *pxmitframe_queue);
 extern s32 check_amsdu(struct xmit_frame *pxmitframe);
 extern s32 check_amsdu_tx_support(_adapter *padapter, struct pkt_attrib *pattrib);
+#ifdef CONFIG_RTW_TX_AMSDU_CHK_LEN
+extern s32 check_amsdu_len(_adapter *padapter, struct xmit_frame *pxmitframe, int *amsdu_len, int tx_amsdu);
+extern struct xmit_frame *rtw_get_xframe(struct xmit_priv *pxmitpriv, int *num_frame, int *len_frame);
+#else
 extern struct xmit_frame *rtw_get_xframe(struct xmit_priv *pxmitpriv, int *num_frame);
+#endif
 #endif
 
 #ifdef DBG_TXBD_DESC_DUMP
@@ -1175,7 +1197,7 @@ void rtw_set_xmit_block(_adapter *padapter, enum XMIT_BLOCK_REASON reason);
 void rtw_clr_xmit_block(_adapter *padapter, enum XMIT_BLOCK_REASON reason);
 bool rtw_is_xmit_blocked(_adapter *padapter);
 #ifdef CONFIG_LAYER2_ROAMING
-void dequeuq_roam_pkt(_adapter *padapter);
+void dequeuq_roam_pkt(_adapter *padapter, bool drop);
 #endif
 /* include after declaring struct xmit_buf, in order to avoid warning */
 #include <xmit_osdep.h>

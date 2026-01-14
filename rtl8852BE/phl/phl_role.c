@@ -562,7 +562,6 @@ _phl_wifi_role_alloc_sw(struct phl_info_t *phl_info,
 	#ifdef RTW_PHL_BCN
 		if (rtw_phl_role_is_ap_category(role)) {
 			rlink->bcn_cmn.bcn_interval = 100;
-			rlink->mstate = MLME_LINKED;
 			rlink->hiq_win = 50;
 			rlink->bss_params_chg_cnt = 0;
 		}
@@ -1307,9 +1306,7 @@ phl_wifi_role_change(struct phl_info_t *phl_info,
 					#ifdef RTW_WKARD_STA_BCN_INTERVAL
 					#ifdef RTW_PHL_BCN
 					if (rtw_phl_role_is_ap_category(wrole)) {
-						wrole->mstate = MLME_LINKED;
 						tmp_rlink->bcn_cmn.bcn_interval = 100;
-						tmp_rlink->mstate = MLME_LINKED;
 						tmp_rlink->hiq_win = 16; /* unit: ms */
 					}
 					#endif
@@ -1328,7 +1325,6 @@ phl_wifi_role_change(struct phl_info_t *phl_info,
 
 					mode = PHL_UPD_ROLE_TYPE_CHANGE;
 					pstate = phl_change_stainfo(phl_info, sta, mode);
-					/*rtw_hal_change_sta_entry(phl_info->hal, sta);*/
 				}
 			}
 			else {
@@ -1609,8 +1605,9 @@ phl_wifi_role_change(struct phl_info_t *phl_info,
 				SET_STATUS_FLAG(wrole->status, WR_STATUS_LSN_DISCOV);
 			else
 				CLEAR_STATUS_FLAG(wrole->status, WR_STATUS_LSN_DISCOV);
-			phl_mr_info_upt(phl_info, rlink);
-			rtw_phl_mr_rx_filter_opt(phl_info, rlink);
+			pstate = phl_mr_info_upt(phl_info, rlink);
+			if (RTW_PHL_STATUS_SUCCESS == pstate)
+				pstate = rtw_phl_mr_rx_filter_opt(phl_info, rlink);
 		}
 		break;
 	case WR_CHG_FIX_ANT_DIV:
@@ -1649,6 +1646,9 @@ phl_wifi_role_change(struct phl_info_t *phl_info,
 				__func__, chg_id);
 		break;
 	};
+	if (RTW_PHL_STATUS_SUCCESS != pstate)
+		PHL_TRACE(COMP_PHL_DBG, _PHL_ERR_, "%s: Failed, chg_id(%d)\n",
+			  __func__, chg_id);
 	return pstate;
 }
 

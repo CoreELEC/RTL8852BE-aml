@@ -99,7 +99,7 @@
 #endif
 
 extern int RTW_STATUS_CODE(int error_code);
-extern u16 rtw_warn_on_cnt;
+extern ATOMIC_T rtw_warn_on_cnt;
 
 #ifndef RTK_DMP_PLATFORM
 	#define CONFIG_USE_VMALLOC
@@ -357,8 +357,6 @@ sysptime rtw_sptime_set(s64 secs, const u32 nsecs);
 sysptime rtw_sptime_zero(void);
 
 int rtw_sptime_cmp(const sysptime cmp1, const sysptime cmp2);
-bool rtw_sptime_eql(const sysptime cmp1, const sysptime cmp2);
-bool rtw_sptime_is_zero(const sysptime sptime);
 sysptime rtw_sptime_sub(const sysptime lhs, const sysptime rhs);
 sysptime rtw_sptime_add(const sysptime lhs, const sysptime rhs);
 
@@ -368,14 +366,16 @@ s64 rtw_sptime_to_us(const sysptime sptime);
 sysptime rtw_us_to_sptime(u64 us);
 s64 rtw_sptime_to_ns(const sysptime sptime);
 sysptime rtw_ns_to_sptime(u64 ns);
-
-s64 rtw_sptime_diff_ms(const sysptime start, const sysptime end);
-s64 rtw_sptime_pass_ms(const sysptime start);
-s64 rtw_sptime_diff_us(const sysptime start, const sysptime end);
-s64 rtw_sptime_pass_us(const sysptime start);
-s64 rtw_sptime_diff_ns(const sysptime start, const sysptime end);
-s64 rtw_sptime_pass_ns(const sysptime start);
 #endif /* !CONFIG_OSDEP_SPTIME_API */
+
+#define rtw_sptime_eql(cmp1, cmp2) (rtw_sptime_cmp(cmp1, cmp2) == 0)
+#define rtw_sptime_is_zero(sptime) (rtw_sptime_cmp(sptime, rtw_sptime_zero()) == 0)
+#define rtw_sptime_diff_ms(start, end) rtw_sptime_to_ms(rtw_sptime_sub(end, start))
+#define rtw_sptime_diff_us(start, end) rtw_sptime_to_us(rtw_sptime_sub(end, start))
+#define rtw_sptime_diff_ns(start, end) rtw_sptime_to_ns(rtw_sptime_sub(end, start))
+#define rtw_sptime_pass_ms(start) rtw_sptime_diff_ms(start, rtw_sptime_get())
+#define rtw_sptime_pass_us(start) rtw_sptime_diff_us(start, rtw_sptime_get())
+#define rtw_sptime_pass_ns(start) rtw_sptime_diff_ns(start, rtw_sptime_get())
 
 void rtw_sleep_schedulable(int ms);
 
@@ -606,7 +606,8 @@ void rtw_free_netdev(struct net_device *netdev);
 
 u64 rtw_modular64(u64 x, u64 y);
 u64 rtw_division64(u64 x, u64 y);
- u32 rtw_random32(void);
+s64 rtw_division64_s64(s64 x, s64 y);
+u32 rtw_random32(void);
 
 void rtw_wiphy_rfkill_set_hw_state(struct wiphy *wiphy, bool blocked);
 

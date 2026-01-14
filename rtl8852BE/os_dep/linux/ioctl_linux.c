@@ -58,6 +58,7 @@ extern u8 str_2char2num(u8 hch, u8 lch);
 extern void macstr2num(u8 *dst, u8 *src);
 extern u8 convert_ip_addr(u8 hch, u8 mch, u8 lch);
 
+#ifdef CONFIG_WIRELESS_EXT
 u32 rtw_rates[] = {1000000, 2000000, 5500000, 11000000,
 	6000000, 9000000, 12000000, 18000000, 24000000, 36000000, 48000000, 54000000};
 
@@ -115,6 +116,7 @@ static void indicate_wx_custom_event(_adapter *padapter, char *msg)
 	rtw_mfree(buff, IW_CUSTOM_MAX + 1);
 
 }
+#endif
 #endif
 
 #if 0
@@ -259,6 +261,7 @@ uint	rtw_is_cckratesonly_included(u8 *rate)
 }
 */
 
+#ifdef CONFIG_WIRELESS_EXT
 static inline char *iwe_stream_mac_addr_proess(_adapter *padapter,
 		struct iw_request_info *info, struct wlan_network *pnetwork,
 		char *start, char *stop, struct iw_event *iwe)
@@ -720,6 +723,7 @@ static char *translate_scan(_adapter *padapter,
 
 	return start;
 }
+#endif
 
 static int wpa_set_auth_algs(struct net_device *dev, u32 value)
 {
@@ -1105,6 +1109,7 @@ exit:
 	return ret;
 }
 
+#ifdef CONFIG_WIRELESS_EXT
 static int rtw_wx_get_name(struct net_device *dev,
 			   struct iw_request_info *info,
 			   union iwreq_data *wrqu, char *extra)
@@ -2695,7 +2700,7 @@ static int rtw_wx_set_enc(struct net_device *dev,
 		ret = -EOPNOTSUPP;
 		goto exit;
 	}
-	
+
 
 exit:
 
@@ -2921,7 +2926,7 @@ static int rtw_wx_set_auth(struct net_device *dev,
 			if (MLME_IS_STA(padapter) == _FALSE)
 				rtw_free_assoc_resources_cmd(padapter, _TRUE, RTW_CMDF_WAIT_ACK);
 			RTW_INFO("%s...call rtw_indicate_disconnect\n ", __FUNCTION__);
-			rtw_indicate_disconnect(padapter, 0, _FALSE);
+			rtw_indicate_disconnect(padapter, 0, _TRUE);
 
 			pmlmeinfo->disconnect_occurred_time = rtw_systime_to_ms(rtw_get_current_time());
 			pmlmeinfo->disconnect_code = DISCONNECTION_BY_SYSTEM_DUE_TO_HIGH_LAYER_COMMAND;
@@ -3726,11 +3731,13 @@ exit:
 	return ret;
 
 }
+#endif
 
 #ifdef DBG_CMD_QUEUE
 u8 dump_cmd_id = 0;
 #endif
 
+#ifdef CONFIG_WIRELESS_EXT
 static int rtw_dbg_port(struct net_device *dev,
 			struct iw_request_info *info,
 			union iwreq_data *wrqu, char *extra)
@@ -3739,6 +3746,7 @@ static int rtw_dbg_port(struct net_device *dev,
 
 	return ret;
 }
+#endif
 
 static int wpa_set_param(struct net_device *dev, u8 name, u32 value)
 {
@@ -4879,6 +4887,7 @@ out:
 }
 #endif
 
+#ifdef CONFIG_WIRELESS_EXT
 static int rtw_wx_set_priv(struct net_device *dev,
 			   struct iw_request_info *info,
 			   union iwreq_data *awrq,
@@ -5048,6 +5057,8 @@ FREE_EXT:
 	return ret;
 
 }
+#endif
+
 #ifdef CONFIG_WOWLAN
 static int rtw_wowlan_ctrl(struct net_device *dev,
 			   struct iw_request_info *info,
@@ -5561,7 +5572,7 @@ static int rtw_mp_customer_str(
 }
 #endif /* CONFIG_RTW_CUSTOMER_STR */
 
-
+#ifdef CONFIG_WIRELESS_EXT
 #ifdef CONFIG_SDIO_INDIRECT_ACCESS
 #define DBG_MP_SDIO_INDIRECT_ACCESS 1
 static int rtw_mp_sd_iread(struct net_device *dev
@@ -5824,7 +5835,7 @@ static int rtw_priv_get(struct net_device *dev,
 #endif
 
 	} else {
-			switch (subcmd) {
+		switch (subcmd) {
 #ifdef CONFIG_SDIO_INDIRECT_ACCESS
 			case MP_SD_IREAD:
 				status = rtw_mp_sd_iread(dev, info, wrqu, extra);
@@ -5841,8 +5852,8 @@ static int rtw_priv_get(struct net_device *dev,
 #endif
 			default:
 				return -EIO;
-			}
 		}
+	}
 
 	return status;
 }
@@ -7555,7 +7566,7 @@ static const struct iw_priv_args rtw_mp_private_args[] = {
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_txpower"},
 	{ MP_ANT_TX , IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_ant_tx"},
-	{ MP_ANT_RX , IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, 
+	{ MP_ANT_RX , IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_ant_rx"},
 	{ WRITE_REG , IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "write_reg" },
@@ -7599,7 +7610,7 @@ static const struct iw_priv_args rtw_mp_private_args[] = {
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_rx" },
 	{ MP_HW_TX_MODE, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_hxtx" },
-	{ MP_PWRLMT, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, 
+	{ MP_PWRLMT, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_pwrlmt" },
 	{ MP_PWRBYRATE, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_pwrbyrate" },
@@ -7608,13 +7619,13 @@ static const struct iw_priv_args rtw_mp_private_args[] = {
 	{ MP_LCK, IW_PRIV_TYPE_CHAR | 1024, 0, "mp_lck"},
 	{ BT_EFUSE_FILE, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "bt_efuse_file" },
-	{ MP_SWRFPath, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, 
+	{ MP_SWRFPath, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_swrfpath" },
-	{ MP_LINK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, 
+	{ MP_LINK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_link" },
 	{ MP_DPK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_dpk"},
-	{ MP_DPK_TRK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, 
+	{ MP_DPK_TRK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_dpk_trk" },
 	{ MP_GET_TSSIDE, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_get_tsside" },
@@ -7763,7 +7774,6 @@ static struct iw_statistics *rtw_get_wireless_stats(struct net_device *dev)
 }
 #endif
 
-#ifdef CONFIG_WIRELESS_EXT
 struct iw_handler_def rtw_handlers_def = {
 	.standard = rtw_handlers,
 	.num_standard = sizeof(rtw_handlers) / sizeof(iw_handler),
@@ -7777,7 +7787,6 @@ struct iw_handler_def rtw_handlers_def = {
 	.get_wireless_stats = rtw_get_wireless_stats,
 #endif
 };
-#endif
 
 /* copy from net/wireless/wext.c start
  * ----------------------------------------------------------------
@@ -8213,6 +8222,7 @@ static int rtw_ioctl_wext_private(struct net_device *dev, struct ifreq *rq)
 #endif /* CONFIG_COMPAT */
 		return rtw_ioctl_standard_wext_private(dev, rq);
 }
+#endif /* CONFIG_WIRELESS_EXT */
 
 int rtw_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 {
@@ -8233,9 +8243,11 @@ int rtw_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 		break;
 #endif
 #endif /* CONFIG_AP_MODE */
+#ifdef CONFIG_WIRELESS_EXT
 	case SIOCDEVPRIVATE:
 		ret = rtw_ioctl_wext_private(dev, rq);
 		break;
+#endif
 	case (SIOCDEVPRIVATE+1):
 		ret = rtw_android_priv_cmd(dev, rq, cmd);
 		break;

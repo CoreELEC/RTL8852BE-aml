@@ -95,7 +95,7 @@ exit:
 	return res;
 }
 
-#ifdef CONFIG_PCIE_TRX_MIT
+#if defined (CONFIG_PCIE_TRX_MIT) && defined (CONFIG_PCIE_TRX_MIT_FIX)
 static void rtw_pcie_trx_mit_cb(void *drv_priv, u8 *cmd, u32 cmd_len, enum rtw_phl_status status)
 {
 	/* cmd point to mit_info. */
@@ -130,7 +130,7 @@ u8 rtw_pcie_trx_mit_cmd(_adapter *padapter, u32 tx_timer, u8 tx_counter,
 	psts = rtw_phl_cmd_enqueue(dvobj->phl,
 				padapter_link->wrlink->hw_band,
 				MSG_EVT_PCIE_TRX_MIT,
-				(u8 *)mit_info, sizeof(mit_info),
+				(u8 *)mit_info, sizeof(struct rtw_pcie_trx_mit_info_t),
 				rtw_pcie_trx_mit_cb,
 				PHL_CMD_NO_WAIT, 0);
 

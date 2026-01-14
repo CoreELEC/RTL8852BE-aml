@@ -352,6 +352,11 @@ u8 rtw_efuse_map_write(_adapter * adapter, u16 addr, u16 cnts, u8 *data, u8 efus
 
 	efuse_arg = rtw_zmalloc(sizeof(struct rtw_efuse_phl_arg));
 
+	if (efuse_arg == NULL) {
+		status = _FAIL;
+		goto exit;
+	}
+
 	if (efuse_type == RTW_EFUSE_WIFI)
 		err = rtw_efuse_get_map_size(adapter, &size, RTW_EFUSE_CMD_WIFI_GET_LOG_SIZE);
 	else if (efuse_type == RTW_EFUSE_BT)
@@ -1603,28 +1608,27 @@ exit:
 
 u8 rtw_efuse_bt_write_raw_hidden(_adapter * adapter, u16 addr, u16 cnts, u8 *data)
 {
-	u8 status = _SUCCESS;
+	u8 status = _FAIL;
 	struct rtw_efuse_phl_arg *efuse_arg = NULL;
 	u16 i = 0;
 
 	efuse_arg = _rtw_zmalloc(sizeof(struct rtw_efuse_phl_arg));
-
-	while (i < cnts) {
-		efuse_arg->io_type = 1;
-		efuse_arg->io_offset = addr + i;
-		efuse_arg->io_value = data[i];
-		rtw_efuse_cmd(adapter, efuse_arg, RTW_EFUSE_CMD_BT_WRITE_HIDDEN);
-		if (efuse_arg->cmd_ok && efuse_arg->status == RTW_PHL_STATUS_SUCCESS)
-			status = _SUCCESS;
-		else{
-			status = _FAIL;
-			break;
-		}
-		i++;
-	}
-exit :
-	if (efuse_arg)
+    if (efuse_arg) {
+	    while (i < cnts) {
+		    efuse_arg->io_type = 1;
+		    efuse_arg->io_offset = addr + i;
+		    efuse_arg->io_value = data[i];
+		    rtw_efuse_cmd(adapter, efuse_arg, RTW_EFUSE_CMD_BT_WRITE_HIDDEN);
+		    if (efuse_arg->cmd_ok && efuse_arg->status == RTW_PHL_STATUS_SUCCESS)
+			    status = _SUCCESS;
+		    else{
+			    status = _FAIL;
+			    break;
+		    }
+		    i++;
+	    }
 		_rtw_mfree(efuse_arg, sizeof(struct rtw_efuse_phl_arg));
+    }
 
 	return status;
 }

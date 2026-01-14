@@ -24,9 +24,11 @@
 #define SURVEY_TO		(100)
 #endif /*SURVEY_TO*/
 #define ACTIVE_CH_SURVEY_TO	(50)
+#define ROAM_CH_SURVEY_TO	(20)
 
 #define REAUTH_TO		(300) /* (50) */
 #define REASSOC_TO		(300) /* (50) */
+#define SAE_AUTH_TIMEOUT	(2400)
 /* #define DISCONNECT_TO	(3000) */
 #define ADDBA_TO			(2000)
 
@@ -553,7 +555,6 @@ unsigned int decide_wait_for_beacon_timeout(unsigned int bcn_interval);
 #if CONFIG_IEEE80211_BAND_6GHZ
 BOOLEAN Is6GHzPreferScanChannel(u8 channel);
 #endif
-BOOLEAN IsLegal5GChannel(_adapter *adapter, u8 channel);
 
 u8 collect_bss_info(_adapter *padapter, union recv_frame *precv_frame, WLAN_BSSID_EX *bssid);
 void rtw_update_adapter_network(WLAN_BSSID_EX *dst, WLAN_BSSID_EX *src, _adapter *padapter, bool update_ie);
@@ -1015,7 +1016,7 @@ u8 rtw_get_ch_utilization(_adapter *adapter);
 void rtw_ch_util_rpt(_adapter *adapter);
 #endif
 
-void rtw_set_mac_addr_hw(_adapter *adapter, const u8 *mac_addr);
+u8 rtw_set_mac_addr(_adapter *padapter, const u8 *mac_addr, bool cfg_hw, bool directly);
 
 #define GEN_MLME_EXT_HANDLER(name, cmd, callback)	{name, cmd, callback},
 

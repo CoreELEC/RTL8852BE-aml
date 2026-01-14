@@ -442,15 +442,19 @@ void halbb_cmn_info_self_init_per_phy(struct bb_info *bb)
 	else
 		bb->num_ss = 1;
 
-	/*[RF path number / N_STS]*/
+	/*[RF path number / N_STS / MAX Tx path number]*/
 	if (bb->ic_type & BB_IC_1SS) {
 		bb->num_rf_path = 1;
+		bb->num_tx_path = 1;
 	} else if (bb->ic_type & BB_IC_2SS) {
 		bb->num_rf_path = 2;
+		bb->num_tx_path = 2;
 	} else if (bb->ic_type & BB_IC_3SS) {
 		bb->num_rf_path = 3;
+		bb->num_tx_path = 3;
 	} else if (bb->ic_type & BB_IC_4SS) {
 		bb->num_rf_path = 4;
+		bb->num_tx_path = 4;
 
 		#if 0
 		if (bb->ic_type & BB_RTL8934A)

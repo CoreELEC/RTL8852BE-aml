@@ -725,9 +725,11 @@ static inline void _os_spinlock(void *d, _os_lock *plock,
 {
 	if(type == _irq)
 	{
-		if(flags==NULL)
+		if(flags==NULL) {
 			RTW_ERR("_os_spinlock_irq: flags=NULL @%s:%u\n",
 				__FUNCTION__, __LINE__);
+			return;
+		}
 		_rtw_spinlock_irq(plock, flags);
 	}
 	else if(type == _bh)
@@ -741,9 +743,11 @@ static inline void _os_spinunlock(void *d, _os_lock *plock,
 {
 	if(type == _irq)
 	{
-		if(flags==NULL)
+		if(flags==NULL) {
 			RTW_ERR("_os_spinunlock_irq: flags=NULL @%s:%u\n",
 				__FUNCTION__, __LINE__);
+			return;
+		}
 		_rtw_spinunlock_irq(plock, flags);
 	}
 	else if(type == _bh)

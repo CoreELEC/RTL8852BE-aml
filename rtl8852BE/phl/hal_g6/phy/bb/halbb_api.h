@@ -97,4 +97,5 @@ void halbb_pwr_diff_wa_enable(struct bb_info *bb, enum phl_phy_idx phy_idx);
 void halbb_pwr_diff_wa_disable(struct bb_info *bb, enum phl_phy_idx phy_idx);
 void halbb_per_macid_tx_path_init(struct bb_info *bb, u16 macid);
 void halbb_set_cctrl_tbl(struct bb_info *bb, u16 macid, u16 cfg);
+enum rf_path halbb_bb_path_2_rf_path(struct bb_info *bb, enum bb_path path_in);
 #endif

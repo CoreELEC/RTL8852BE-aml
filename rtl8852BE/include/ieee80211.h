@@ -237,9 +237,9 @@ struct wpa_eapol_key {
 	u8 key_iv[16];
 	u8 key_rsc[WPA_KEY_RSC_LEN];
 	u8 key_id[8]; /* Reserved in IEEE 802.11i/RSN */
-	u8 key_mic[16];
-	u8 key_data_length[2]; /* big endian */
-	/* followed by key_data_length bytes of key_data */
+	/* variable length Key MIC field */
+	/* big endian 2-octet Key Data Length field */
+	/* followed by Key Data Length bytes of Key Data */
 };
 
 #define is_legacy_only(net_type)  ((net_type) == ((net_type) & (WLAN_MD_11BG | WLAN_MD_11A)))
@@ -301,7 +301,7 @@ typedef struct ieee_param {
 typedef struct ieee_param_ex {
 	u32 cmd;
 	u8 sta_addr[ETH_ALEN];
-	u8 data[0];
+	u8 data[];
 } ieee_param_ex;
 
 struct sta_data {
@@ -716,6 +716,7 @@ struct ieee80211_snap_hdr {
 #define WLAN_EID_EXTENSION_HE_CAPABILITY	35
 #define WLAN_EID_EXTENSION_HE_OPERATION	36
 #define WLAN_EID_EXTENSION_HE_MU_EDCA	38
+#define WLAN_EID_EXT_NON_INHERITANCE 56
 #define WLAN_EID_EXT_HE_6G_CAP 59
 
 #define WLAN_EID_EXT_CAP_MAX_LEN 10
@@ -1254,7 +1255,7 @@ struct ieee80211_info_element_hdr {
 struct ieee80211_info_element {
 	u8 id;
 	u8 len;
-	u8 data[0];
+	u8 data[];
 } __attribute__((packed));
 #endif
 
@@ -1820,9 +1821,9 @@ struct rtw_ieee802_11_elems {
 	u8 *he_capabilities;
 	u8 he_capabilities_len;
 	u8 *he_operation;
+	u8 he_operation_len;
 	u8 *he_6g_band_cap;
 	u8 he_6g_band_cap_len;
-	u8 he_operation_len;
 	u8 *rm_en_cap;
 	u8 rm_en_cap_len;
 #ifdef CONFIG_RTW_MESH
@@ -1844,12 +1845,14 @@ struct rtw_ieee802_11_elems {
 	u8 *country_info;
 	u8 country_info_len;
 #ifdef CONFIG_STA_MULTIPLE_BSSID
-	u8 *mbssid;
+	u8 *mbssid; /* possible multiple ie, used for checking existence */
 	u8 mbssid_len;
 
 	/* exist in nontransmitted bssid profile */
 	u8 *non_tx_bssid_cap;
 	u8 non_tx_bssid_cap_len;
+	u8 *non_inheritance;
+	u8 non_inheritance_len;
 #endif
 };
 
@@ -1860,9 +1863,8 @@ ParseRes rtw_ieee802_11_parse_elems(u8 *start, uint len,
 				int show_errors);
 
 #ifdef CONFIG_STA_MULTIPLE_BSSID
-ParseRes rtw_ieee802_11_override_elems_by_mbssid(
-	u8 *mbssid_ie, uint mbssid_ie_len, u8 mbssid_idx, struct rtw_ieee802_11_elems *elems
-	, int show_errors);
+ParseRes rtw_ieee802_11_override_elems_by_mbssid(u8 *start, uint len
+	, u8 tgt_mbssid_idx, struct rtw_ieee802_11_elems *elems, int show_errors);
 #endif
 
 u8 *rtw_set_fixed_ie(unsigned char *pbuf, unsigned int len, unsigned char *source, unsigned int *frlen);
@@ -2056,6 +2058,7 @@ u32	rtw_ht_mcs_set_to_bitmap(u8 *mcs_set, u8 nss);
 int rtw_action_frame_parse(const u8 *frame, u32 frame_len, u8 *category, u8 *action);
 const char *action_public_str(u8 action);
 
+u8 key_char2num(u8 ch);
 u8 key_2char2num(u8 hch, u8 lch);
 u8 str_2char2num(u8 hch, u8 lch);
 void macstr2num(u8 *dst, u8 *src);

@@ -30,6 +30,8 @@ void rtw_phl_write_bbreg(void *phl,
 			u32 offset, u32 bit_mask, u32 data);
 u32 rtw_phl_read_rfreg(void *phl,
 			enum rf_path path, u32 offset, u32 bit_mask);
+u32 rtw_phl_cmd_read_rfreg(void *phl, enum rf_path path, u32 offset,
+			   u32 bit_mask);
 void rtw_phl_write_rfreg(void *phl,
 			enum rf_path path, u32 offset, u32 bit_mask, u32 data);
 enum rtw_phl_status rtw_phl_interrupt_handler(void *phl);
@@ -39,6 +41,7 @@ void rtw_phl_disable_interrupt(void *phl);
 bool rtw_phl_recognize_interrupt(void *phl);
 void rtw_phl_clear_interrupt(void *phl);
 void rtw_phl_restore_interrupt(void *phl);
+enum rtw_phl_status rtw_phl_interrupt_request_handler(void *phl);
 
 enum rtw_phl_status
 rtw_phl_cmd_cfg_hw_seq(void *phl,

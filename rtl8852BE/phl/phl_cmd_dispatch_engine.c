@@ -802,16 +802,11 @@ phl_disp_eng_exclusive_ready(struct phl_info_t *phl, u8 band_idx)
 
 enum rtw_phl_status
 phl_disp_eng_notify_dev_io_status(struct phl_info_t *phl,
-                                  u8 band_idx,
                                   enum phl_module_id mdl_id,
                                   bool allow_io)
 {
 	struct phl_cmd_dispatch_engine *disp_eng = &(phl->disp_eng);
 	u8 i = 0;
-
-	band_idx = HW_BAND_MAX; /* force all band stop IO */
-	if (band_idx != HW_BAND_MAX)
-		return dispr_notify_dev_io_status(disp_eng->dispatcher[band_idx], mdl_id, allow_io);
 
 	for (i = 0; i < disp_eng->phy_num; i++)
 		dispr_notify_dev_io_status(disp_eng->dispatcher[i], mdl_id, allow_io);
@@ -1004,7 +999,7 @@ enum rtw_phl_status phl_disp_eng_exclusive_ready(struct phl_info_t *phl, u8 band
 {
 	return RTW_PHL_STATUS_FAILURE;
 }
-enum rtw_phl_status phl_disp_eng_notify_dev_io_status(struct phl_info_t *phl, u8 band_idx,
+enum rtw_phl_status phl_disp_eng_notify_dev_io_status(struct phl_info_t *phl,
 							enum phl_module_id mdl_id, bool allow_io)
 {
 	return RTW_PHL_STATUS_FAILURE;

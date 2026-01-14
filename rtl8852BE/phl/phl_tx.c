@@ -136,8 +136,9 @@ void phl_dump_h2c_pool_stats(struct phl_h2c_pkt_pool *h2c_pkt_pool)
 
 #ifdef CONFIG_PHL_H2C_PKT_POOL_STATS_CHECK
 struct phl_h2c_pkt_alloc_cnt *
-rtw_phl_dump_h2c_pool_alloc_stats(struct phl_info_t *phl_info)
+rtw_phl_dump_h2c_pool_alloc_stats(void *phl)
 {
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
 	struct phl_h2c_pkt_pool *h2c_pkt_pool = phl_info->h2c_pool;
 	struct phl_h2c_pkt_alloc_cnt *h2c_pkt_alloc_cnt = &phl_info->h2c_alloc_cnt;
 	struct rtw_h2c_pkt_return_list *h2c_pkt_return_list = &phl_info->h2c_pkt_return_list;
@@ -658,40 +659,47 @@ void _phl_reset_tx_plan(struct phl_info_t *phl_info,
 }
 
 
-void _phl_sort_ring_by_tid(struct phl_ring_status *ring_sts,
+void _phl_sort_ring_by_tid(struct phl_info_t *phl_info,
+			   struct phl_ring_status *ring_sts,
 			   struct phl_tx_plan *tx_plan,
 			   enum rtw_phl_ring_cat cat)
 {
 	struct phl_ring_status *last_sts = NULL;
+	struct rtw_phl_com_t *phl_com = phl_info->phl_com;
 
-	if (ring_sts->ring_ptr->cat == RTW_PHL_RING_CAT_TID1) {
-		list_add_tail(&ring_sts->list,
-			      &tx_plan->sorted_ring);
-	} else if (ring_sts->ring_ptr->cat == RTW_PHL_RING_CAT_TID2) {
-		if (list_empty(&tx_plan->sorted_ring)) {
-			list_add_tail(&ring_sts->list,
-				      &tx_plan->sorted_ring);
-		} else {
-			last_sts = list_last_entry(&tx_plan->sorted_ring,
-			                   struct phl_ring_status, list);
-			if (RTW_PHL_RING_CAT_TID1 == last_sts->ring_ptr->cat) {
-				__list_add(&ring_sts->list,
-					   _get_prev(&last_sts->list),
-					   &last_sts->list);
-			} else {
-				list_add_tail(&ring_sts->list,
-					      &tx_plan->sorted_ring);
-                        }
-		}
-	} else {
+	if (phl_com->dev_cap.tx_ring_tid_rr == true) {
 		list_add(&ring_sts->list,
 			 &tx_plan->sorted_ring);
-		if (RTW_PHL_RING_CAT_MGNT == cat)
-			tx_plan->has_mgnt = true;
-		else if (RTW_PHL_RING_CAT_HIQ == cat)
-			tx_plan->has_hiq = true;
+	} else {
+		if (ring_sts->ring_ptr->cat == RTW_PHL_RING_CAT_TID1) {
+			list_add_tail(&ring_sts->list,
+				      &tx_plan->sorted_ring);
+		} else if (ring_sts->ring_ptr->cat == RTW_PHL_RING_CAT_TID2) {
+			if (list_empty(&tx_plan->sorted_ring)) {
+				list_add_tail(&ring_sts->list,
+					      &tx_plan->sorted_ring);
+			} else {
+				last_sts = list_last_entry(&tx_plan->sorted_ring,
+				                   struct phl_ring_status, list);
+				if (RTW_PHL_RING_CAT_TID1 == last_sts->ring_ptr->cat) {
+					__list_add(&ring_sts->list,
+						   _get_prev(&last_sts->list),
+						   &last_sts->list);
+				} else {
+					list_add_tail(&ring_sts->list,
+						      &tx_plan->sorted_ring);
+	                        }
+			}
+		} else {
+			list_add(&ring_sts->list,
+				 &tx_plan->sorted_ring);
+		}
 	}
 
+	if (RTW_PHL_RING_CAT_MGNT == cat)
+		tx_plan->has_mgnt = true;
+	else if (RTW_PHL_RING_CAT_HIQ == cat)
+		tx_plan->has_hiq = true;
 }
 
 void _phl_check_tring_list(struct phl_info_t *phl_info,
@@ -701,16 +709,20 @@ void _phl_check_tring_list(struct phl_info_t *phl_info,
 	struct phl_ring_status *ring_sts = NULL;
 	struct rtw_phl_tx_ring *ring = NULL;
 	struct phl_tx_plan *tx_plan = &tring_list->tx_plan;
+	struct rtw_phl_com_t *phl_com = phl_info->phl_com;
 	u8 i = 0;
 
 	for (i = 0; i < MAX_PHL_RING_CAT_NUM; i++) {
 
-		ring = &tring_list->phl_ring[i];
+		if (phl_com->dev_cap.tx_ring_tid_rr == true && i < 8)
+			ring = &tring_list->phl_ring[((phl_info->tx_tid_turn + i + 1) % 8)];
+		else
+			ring = &tring_list->phl_ring[i];
 
 		ring_sts = _phl_check_ring_status(phl_info, ring, tring_list);
 
 		if (NULL != ring_sts) {
-			_phl_sort_ring_by_tid(ring_sts, tx_plan, i);
+			_phl_sort_ring_by_tid(phl_info, ring_sts, tx_plan, i);
 		} else {
 			continue;
 		}
@@ -807,6 +819,17 @@ void phl_tx_flow_ctrl(struct phl_info_t *phl_info, _os_list *sta_list)
 		/* clear tx plan */
 		list_del(&tx_plan->list);
 		_phl_reset_tx_plan(phl_info, tx_plan);
+	}
+}
+
+void phl_tx_ting_rr_sw_tid_turn(struct phl_info_t *phl_info,
+					 enum rtw_phl_ring_cat cat)
+{
+	if ((cat != RTW_PHL_RING_CAT_MGNT) && (cat != RTW_PHL_RING_CAT_HIQ)) {
+		if (cat == RTW_PHL_RING_CAT_TID0)
+			phl_info->tx_tid_turn = RTW_PHL_RING_CAT_TID7;
+		else
+			phl_info->tx_tid_turn = (u8)(cat - 1);
 	}
 }
 
@@ -1614,6 +1637,7 @@ enum rtw_phl_status phl_datapath_init(struct phl_info_t *phl_info)
 		_os_spinlock_init(drv_priv, &phl_info->t_ring_list_lock);
 		_os_spinlock_init(drv_priv, &phl_info->rx_ring_lock);
 		_os_spinlock_init(drv_priv, &phl_info->t_fctrl_result_lock);
+		phl_info->tx_tid_turn = RTW_PHL_RING_CAT_TID7;
 		pq_init(drv_priv, &phl_info->t_ring_free_q);
 
 #if defined(CONFIG_RTW_EVENT_HDL_USE_WQ) || defined(CONFIG_PHL_HANDLER_WQ_HIGHPRI)

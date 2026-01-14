@@ -807,8 +807,19 @@ static u32 pcie_set_dbg(struct mac_ax_adapter *adapter)
 	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852B) ||
 	    is_chip_id(adapter, MAC_AX_CHIP_ID_8851B) ||
 	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852BT)) {
-		val32 = MAC_REG_R32(R_AX_PCIE_DBG_CTRL) |
-				    B_AX_ASFF_FULL_NO_STK | B_AX_EN_STUCK_DBG;
+#if MAC_AX_FPGA_TEST
+		if (adapter->env_info.env == DUT_ENV_FPGA) {
+			val32 = MAC_REG_R32(R_AX_PCIE_DBG_CTRL) |
+				B_AX_ASFF_FULL_NO_STK |
+				B_AX_EN_STUCK_DBG;
+		} else {
+			val32 = MAC_REG_R32(R_AX_PCIE_DBG_CTRL) | B_AX_EN_STUCK_DBG;
+			val32 = val32 & ~B_AX_ASFF_FULL_NO_STK;
+		}
+#else
+		val32 = MAC_REG_R32(R_AX_PCIE_DBG_CTRL) | B_AX_EN_STUCK_DBG;
+		val32 = val32 & ~B_AX_ASFF_FULL_NO_STK;
+#endif
 		MAC_REG_W32(R_AX_PCIE_DBG_CTRL, val32);
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A)) {
 #if MAC_AX_8852A_SUPPORT
@@ -2239,7 +2250,7 @@ u32 pcie_pwr_switch(void *vadapter, u8 pre_switch, u8 on)
 u32 set_pcie_wowlan(struct mac_ax_adapter *adapter, enum mac_ax_wow_ctrl w_c)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-	struct mac_ax_efuse_param *efuse_param = &adapter->efuse_param;
+	struct mac_ax_pcie_info *pcie_info = &adapter->pcie_info;
 	u32 ret;
 	u32 bt_dis_state;
 
@@ -2301,7 +2312,7 @@ u32 set_pcie_wowlan(struct mac_ax_adapter *adapter, enum mac_ax_wow_ctrl w_c)
 		}
 
 		bt_dis_state = mac_get_bt_dis(adapter);
-		efuse_param->bt_dis_state = (u8)bt_dis_state;
+		pcie_info->bt_dis_state = (u8)bt_dis_state;
 		if (bt_dis_state == BT_DISN_EN) {
 			ret = mac_set_bt_dis(adapter, BT_DISN_DIS);
 			if (ret != MACSUCCESS)
@@ -2357,7 +2368,7 @@ u32 set_pcie_wowlan(struct mac_ax_adapter *adapter, enum mac_ax_wow_ctrl w_c)
 			return ret;
 		}
 
-		if (efuse_param->bt_dis_state == BT_DISN_EN) {
+		if (pcie_info->bt_dis_state == BT_DISN_EN) {
 			bt_dis_state = mac_get_bt_dis(adapter);
 			if (bt_dis_state == BT_DISN_DIS) {
 				ret = mac_set_bt_dis(adapter, BT_DISN_EN);

@@ -1419,7 +1419,7 @@ bool halbb_ctrl_ch_8852b(struct bb_info *bb, u8 central_ch, enum band_type band,
 		if (band == BAND_ON_5G){
 			bb->support_ability &= ~BB_PWR_CTRL;
 	   		halbb_set_reg(bb, CHSMO_EN_C, CHSMO_EN_C_M, 0x0);
-			halbb_set_reg(bb, 0x4aac, 0xffffffff, 0x11222882);
+			halbb_set_reg(bb, 0x4aac, 0xffffffff, 0x22222882);
 			halbb_set_reg(bb, 0x4ab0, 0xffff, 0xaa12);
 			halbb_set_reg(bb, 0x4454, BIT(13), 0x0);
 			halbb_set_reg(bb, 0x47f0, 0x7, 0x3);

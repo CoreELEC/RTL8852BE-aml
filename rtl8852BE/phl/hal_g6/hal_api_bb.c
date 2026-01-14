@@ -1134,9 +1134,8 @@ rtw_hal_bb_cfg_rx_path(struct rtw_hal_com_t *hal_com, u8 rx_path, u8 phy_idx)
 
 	if(halbb_ctrl_rx_path(hal_info->bb, rx_path, phy_idx)) {
 		halbb_ctrl_rf_mode_rx_path(hal_info->bb, rx_path);
-		status = RTW_HAL_STATUS_SUCCESS;
 	} else {
-		status = RTW_HAL_STATUS_FAILURE;
+		PHL_WARN("[HAL] status = RTW_HAL_STATUS_FAILURE !!!\n");
 	}
 
 	status = rtw_hal_reset(hal_com, HW_PHY_0, HW_BAND_0, false);
@@ -1181,10 +1180,8 @@ rtw_hal_bb_cfg_tx_path(struct rtw_hal_com_t *hal_com, u8 tx_path, u8 phy_idx)
 		}
 	}
 
-	if(halbb_ctrl_tx_path_pmac(hal_info->bb, tx_path, phy_idx))
-		status = RTW_HAL_STATUS_SUCCESS;
-	else
-		status = RTW_HAL_STATUS_FAILURE;
+	if(halbb_ctrl_tx_path_pmac(hal_info->bb, tx_path, phy_idx) != true)
+		PHL_WARN("[HAL] status = RTW_HAL_STATUS_FAILURE !!!\n");
 
 	status = rtw_hal_reset(hal_com, HW_PHY_0, HW_BAND_0, false);
 	if(status != RTW_HAL_STATUS_SUCCESS) {

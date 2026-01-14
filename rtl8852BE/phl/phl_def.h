@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
  *
  * Copyright(c) 2019 - 2021 Realtek Corporation.
  *
@@ -1088,6 +1088,8 @@ enum phl_msg_evt_id {
 	MSG_EVT_DBG_L2_DIAGNOSE = 202,
 	MSG_EVT_DBG_RX_DUMP = 203,
 	MSG_EVT_DBG_TX_DUMP = 204,
+	MSG_EVT_DBG_HAL_PROC_CMD = 205,
+	MSG_EVT_DBG_READ_RFREG = 206,
 	/* dbg end */
 	/* p2pps */
 	MSG_EVT_TSF32_TOG = 210,
@@ -1109,6 +1111,12 @@ enum phl_msg_evt_id {
 
 	MSG_EVT_ANN_RX1SS = 240, /* Announce rx 1ss */
 	MSG_EVT_ANN_RX_MAXSS = 241, /* Announce rx nss for max cap */
+
+	/* APF */
+	MSG_EVT_APF_CTRL = 250,
+	MSG_EVT_APF_RPT_DONE =  251,
+	MSG_EVT_APF_FW_DIS = 252,
+
 	/* sub module IO */
 	MSG_EVT_NOTIFY_BB = 300,
 	MSG_EVT_NOTIFY_RF = 301,
@@ -1443,13 +1451,14 @@ enum rtw_fw_rsn {
 };
 
 enum rtw_fw_type {
-	RTW_FW_NIC, /* 1 */
+	RTW_FW_NIC = 1, /* 1 */
 	RTW_FW_WOWLAN, /* 2 */
 	RTW_FW_AP, /* 3 */
 	RTW_FW_ROM, /* 4 */
 	RTW_FW_SPIC, /* 5 */
 	RTW_FW_VRAP, /* 6 */
 	RTW_FW_NIC_CE, /* 7 */
+	RTW_FW_WOWLAN_CE, /* 8 */
 	RTW_FW_MAX
 };
 
@@ -2443,6 +2452,7 @@ struct dev_cap_t {
 	bool quota_turbo;
 	u8 band_sup;
 	u8 bw_sup;
+	bool tx_ring_tid_rr;
 
 	u16 macid_num;
 	u8 max_link_num;
@@ -4864,10 +4874,6 @@ struct rtw_phl_com_t {
 #ifdef DBG_MONITOR_TIME
 	u32 func_latency[PHL_TIME_FLAGS_SZ];
 #endif
-
-#ifdef CONFIG_PCI_HCI
-	_os_lock imr_lock;
-#endif
 };
 
 struct phl_sec_param_h {
@@ -4995,6 +5001,12 @@ enum pkt_ofld_type {
 	PKT_TYPE_REALWOW_ACK = 10, /* RealWoW Ack Patten */
 	PKT_TYPE_REALWOW_WP = 11, /* RealWoW Wakeup Patten */
 	PKT_TYPE_PROBE_REQ = 12,
+	PKT_TYPE_MDNS_RSP_IPV4 = 13,
+	PKT_TYPE_MDNS_RSP_IPV6 = 14,
+	PKT_TYPE_MDNS_RSP_DATA = 15,
+	PKT_TYPE_MDNS_PASSTHRU_LIST = 16,
+	PKT_TYPE_APF_RSP_HDR = 17,
+	PKT_TYPE_APF_RAM = 18,
 	PKT_OFLD_TYPE_MAX,
 };
 

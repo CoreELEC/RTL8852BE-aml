@@ -35,6 +35,8 @@ void phl_release_ring_sts(struct phl_info_t *phl_info,
 u8 phl_check_xmit_ring_resource(struct phl_info_t *phl_info,
 				_os_list *sta_list);
 void phl_tx_flow_ctrl(struct phl_info_t *phl_info, _os_list *sta_list);
+void phl_tx_ting_rr_sw_tid_turn(struct phl_info_t *phl_info,
+				enum rtw_phl_ring_cat cat);
 enum rtw_phl_status rtw_phl_tx_req_notify(void *phl);
 enum rtw_phl_status phl_register_handler(struct rtw_phl_com_t *phl_com,
 				struct rtw_phl_handler *handler);

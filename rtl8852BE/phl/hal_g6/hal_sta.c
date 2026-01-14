@@ -448,9 +448,6 @@ rtw_hal_cfg_tx_ampdu(void *hal, struct rtw_phl_stainfo_t *sta)
 			__func__, sta->asoc_cap.num_ampdu);
 	}
 
-	if (RTW_HAL_STATUS_SUCCESS != hsts)
-		goto out;
-out:
 	return hsts;
 }
 

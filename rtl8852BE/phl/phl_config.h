@@ -116,6 +116,8 @@
 		#define CONFIG_PHL_CHANNEL_INFO_DBG
 	#endif
 	#define CONFIG_PHL_NAN
+	#define CONFIG_PHL_MDNS_OFFLOAD
+	#define CONFIG_PHL_APF
 	#define CONFIG_PHL_DIAGNOSE
 	#define DBG_MONITOR_TIME
 	#define CONFIG_PHL_BEAMFORM
@@ -380,6 +382,20 @@
 #ifdef CONFIG_NAN
 #define CONFIG_PHL_NAN
 #endif
+
+#ifdef CONFIG_MDNS_OFFLOAD
+#define CONFIG_PHL_MDNS_OFFLOAD
+#endif
+
+#ifdef CONFIG_APF
+#define CONFIG_PHL_APF
+#ifdef CONFIG_APF_DBG
+#define CONFIG_PHL_APF_DBG
+#endif
+#ifdef CONFIG_APF_DBG_DUMP
+#define CONFIG_PHL_APF_DBG_DUMP
+#endif
+#endif /* CONFIG_APF */
 
 #ifdef CONFIG_RA_TXSTS_DBG
 #define CONFIG_PHL_RA_TXSTS_DBG

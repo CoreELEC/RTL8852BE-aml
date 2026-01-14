@@ -21,6 +21,9 @@
 #include <rtw_mp.h>
 #endif
 
+#ifdef CONFIG_MDNS_OFFLOAD
+#include <linux/ctype.h>	/* tolower() */
+#endif
 
 #ifdef CONFIG_RTW_DEBUG
 const char *rtw_log_level_str[] = {
@@ -187,6 +190,10 @@ void dump_drv_cfg(void *sel)
 
 #ifdef CONFIG_TCP_CSUM_OFFLOAD_RX
 	RTW_PRINT_SEL(sel, "CONFIG_TCP_CSUM_OFFLOAD_RX\n");
+#endif
+
+#ifdef CONFIG_IP_R_MONITOR
+	RTW_PRINT_SEL(sel, "CONFIG_IP_R_MONITOR\n");
 #endif
 
 #ifdef CONFIG_USB_HCI
@@ -385,7 +392,7 @@ void rtw_sink_rtp_seq_dbg(_adapter *adapter, u8 *ehdr_pos)
 				} else {
 					RTW_INFO("%s : RTP Seq num from %d to %d\n", __FUNCTION__, precvinfo->pre_rtp_rxseq, precvinfo->cur_rtp_rxseq);
 				}
-			}	
+			}
 		}
 	}
 }
@@ -847,6 +854,175 @@ ssize_t proc_set_ignore_go_and_low_rssi_in_scan(struct file *file,
 }
 #endif /*CONFIG_IGNORE_GO_AND_LOW_RSSI_IN_SCAN_LIST*/
 
+const char *rtw_data_rate_str(u16 rate)
+{
+	if (rate <= RTW_DATA_RATE_CCK11) {
+		switch (rate) {
+#define CASE_CCK_RATE(cck)	case RTW_DATA_RATE_CCK ## cck: return "CCK_" # cck "M"
+		CASE_CCK_RATE(1);
+		CASE_CCK_RATE(2);
+		CASE_CCK_RATE(5_5);
+#undef CASE_CCK_RATE
+		default: /*CASE_CCK_RATE(11)*/
+			return "CCK_11M";
+		}
+	} else if (rate >= RTW_DATA_RATE_OFDM6 && rate <= RTW_DATA_RATE_OFDM54) {
+		switch (rate) {
+#define CASE_OFDM_RATE(ofdm)	case RTW_DATA_RATE_OFDM ## ofdm: return "OFDM_" # ofdm "M"
+		CASE_OFDM_RATE(6);
+		CASE_OFDM_RATE(9);
+		CASE_OFDM_RATE(12);
+		CASE_OFDM_RATE(18);
+		CASE_OFDM_RATE(24);
+		CASE_OFDM_RATE(36);
+		CASE_OFDM_RATE(48);
+#undef CASE_OFDM_RATE
+		default: /*CASE_OFDM_RATE(54)*/
+			return "OFDM_54M";
+		}
+	} else if (rate >= RTW_DATA_RATE_MCS0 && rate <= RTW_DATA_RATE_MCS31) {
+		switch (rate) {
+#define CASE_HT_RATE(mcs)	case RTW_DATA_RATE_MCS ## mcs: return "MCS_" # mcs
+		CASE_HT_RATE(0);
+		CASE_HT_RATE(1);
+		CASE_HT_RATE(2);
+		CASE_HT_RATE(3);
+		CASE_HT_RATE(4);
+		CASE_HT_RATE(5);
+		CASE_HT_RATE(6);
+		CASE_HT_RATE(7);
+		CASE_HT_RATE(8);
+		CASE_HT_RATE(9);
+		CASE_HT_RATE(10);
+		CASE_HT_RATE(11);
+		CASE_HT_RATE(12);
+		CASE_HT_RATE(13);
+		CASE_HT_RATE(14);
+		CASE_HT_RATE(15);
+		CASE_HT_RATE(16);
+		CASE_HT_RATE(17);
+		CASE_HT_RATE(18);
+		CASE_HT_RATE(19);
+		CASE_HT_RATE(20);
+		CASE_HT_RATE(21);
+		CASE_HT_RATE(22);
+		CASE_HT_RATE(23);
+		CASE_HT_RATE(24);
+		CASE_HT_RATE(25);
+		CASE_HT_RATE(26);
+		CASE_HT_RATE(27);
+		CASE_HT_RATE(28);
+		CASE_HT_RATE(29);
+		CASE_HT_RATE(30);
+#undef CASE_HT_RATE
+		default: /*CASE_HT_RATE(31)*/
+			return "MCS_31";
+		}
+	} else if (rate >= RTW_DATA_RATE_VHT_NSS1_MCS0 && rate <= RTW_DATA_RATE_VHT_NSS4_MCS9) {
+		switch (rate) {
+#define CASE_VHT_RATE(ss, mcs)	case RTW_DATA_RATE_VHT_NSS ## ss ##_MCS ##mcs: return "VHT_SS" #ss "MCS" #mcs
+		CASE_VHT_RATE(1, 0);
+		CASE_VHT_RATE(1, 1);
+		CASE_VHT_RATE(1, 2);
+		CASE_VHT_RATE(1, 3);
+		CASE_VHT_RATE(1, 4);
+		CASE_VHT_RATE(1, 5);
+		CASE_VHT_RATE(1, 6);
+		CASE_VHT_RATE(1, 7);
+		CASE_VHT_RATE(1, 8);
+		CASE_VHT_RATE(1, 9);
+		CASE_VHT_RATE(2, 0);
+		CASE_VHT_RATE(2, 1);
+		CASE_VHT_RATE(2, 2);
+		CASE_VHT_RATE(2, 3);
+		CASE_VHT_RATE(2, 4);
+		CASE_VHT_RATE(2, 5);
+		CASE_VHT_RATE(2, 6);
+		CASE_VHT_RATE(2, 7);
+		CASE_VHT_RATE(2, 8);
+		CASE_VHT_RATE(2, 9);
+		CASE_VHT_RATE(3, 0);
+		CASE_VHT_RATE(3, 1);
+		CASE_VHT_RATE(3, 2);
+		CASE_VHT_RATE(3, 3);
+		CASE_VHT_RATE(3, 4);
+		CASE_VHT_RATE(3, 5);
+		CASE_VHT_RATE(3, 6);
+		CASE_VHT_RATE(3, 7);
+		CASE_VHT_RATE(3, 8);
+		CASE_VHT_RATE(3, 9);
+		CASE_VHT_RATE(4, 0);
+		CASE_VHT_RATE(4, 1);
+		CASE_VHT_RATE(4, 2);
+		CASE_VHT_RATE(4, 3);
+		CASE_VHT_RATE(4, 4);
+		CASE_VHT_RATE(4, 5);
+		CASE_VHT_RATE(4, 6);
+		CASE_VHT_RATE(4, 7);
+		CASE_VHT_RATE(4, 8);
+#undef CASE_VHT_RATE
+		default: /*CASE_VHT_RATE(4, 9)*/
+			return "VHT_SS4_MCS9";
+		}
+	} else if (rate >= RTW_DATA_RATE_HE_NSS1_MCS0 && rate <= RTW_DATA_RATE_HE_NSS4_MCS11) {
+		switch (rate) {
+#define CASE_HE_RATE(ss, mcs)	case RTW_DATA_RATE_HE_NSS ## ss ##_MCS ##mcs: return "HE_SS" #ss "MCS" #mcs
+		CASE_HE_RATE(1, 0);
+		CASE_HE_RATE(1, 1);
+		CASE_HE_RATE(1, 2);
+		CASE_HE_RATE(1, 3);
+		CASE_HE_RATE(1, 4);
+		CASE_HE_RATE(1, 5);
+		CASE_HE_RATE(1, 6);
+		CASE_HE_RATE(1, 7);
+		CASE_HE_RATE(1, 8);
+		CASE_HE_RATE(1, 9);
+		CASE_HE_RATE(1, 10);
+		CASE_HE_RATE(1, 11);
+		CASE_HE_RATE(2, 0);
+		CASE_HE_RATE(2, 1);
+		CASE_HE_RATE(2, 2);
+		CASE_HE_RATE(2, 3);
+		CASE_HE_RATE(2, 4);
+		CASE_HE_RATE(2, 5);
+		CASE_HE_RATE(2, 6);
+		CASE_HE_RATE(2, 7);
+		CASE_HE_RATE(2, 8);
+		CASE_HE_RATE(2, 9);
+		CASE_HE_RATE(2, 10);
+		CASE_HE_RATE(2, 11);
+		CASE_HE_RATE(3, 0);
+		CASE_HE_RATE(3, 1);
+		CASE_HE_RATE(3, 2);
+		CASE_HE_RATE(3, 3);
+		CASE_HE_RATE(3, 4);
+		CASE_HE_RATE(3, 5);
+		CASE_HE_RATE(3, 6);
+		CASE_HE_RATE(3, 7);
+		CASE_HE_RATE(3, 8);
+		CASE_HE_RATE(3, 9);
+		CASE_HE_RATE(3, 10);
+		CASE_HE_RATE(3, 11);
+		CASE_HE_RATE(4, 0);
+		CASE_HE_RATE(4, 1);
+		CASE_HE_RATE(4, 2);
+		CASE_HE_RATE(4, 3);
+		CASE_HE_RATE(4, 4);
+		CASE_HE_RATE(4, 5);
+		CASE_HE_RATE(4, 6);
+		CASE_HE_RATE(4, 7);
+		CASE_HE_RATE(4, 8);
+		CASE_HE_RATE(4, 9);
+		CASE_HE_RATE(4, 10);
+#undef CASE_HE_RATE
+		default: /*CASE_HE_RATE(4, 11)*/
+			return "HE_SS4_MCS11";
+		}
+	}
+
+	return "ALL_UNKNOWN";
+}
+
 #ifdef CONFIG_PROC_DEBUG
 int proc_get_rx_stat(struct seq_file *m, void *v)
 {
@@ -1090,7 +1266,7 @@ int proc_get_roam_flags(struct seq_file *m, void *v)
 	for (i = 0; i < sizeof(str); i++)
 		str[i] = (band[i]==BAND_ON_24G)?'2':(band[i]==BAND_ON_5G)?'5':(band[i]==BAND_ON_6G)?'6':0;
 
-	RTW_PRINT_SEL(m, "0x%02x, order:%s\n", rtw_roam_flags(adapter), str);
+	RTW_PRINT_SEL(m, "0x%04x, order:%s\n", rtw_roam_flags(adapter), str);
 
 	return 0;
 }
@@ -1101,8 +1277,8 @@ ssize_t proc_set_roam_flags(struct file *file, const char __user *buffer, size_t
 	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
 
 	char tmp[32], str[8];
-	int num, i;
-	u8 flags;
+	int num, i = 0;
+	u16 flags;
 
 	if (count < 1)
 		return -EFAULT;
@@ -1114,12 +1290,12 @@ ssize_t proc_set_roam_flags(struct file *file, const char __user *buffer, size_t
 
 	if (buffer && !copy_from_user(tmp, buffer, count)) {
 
-		num = sscanf(tmp, "%hhx %d", &flags, &i);
+		num = sscanf(tmp, "%hx %d", &flags, &i);
 
 		if (num >= 1)
 			rtw_assign_roam_flags(adapter, flags);
 
-		if (i > 0) {
+		if (num >= 2 && i > 0) {
 			sprintf(str, "%d", i);
 			for (i = 0; i < sizeof(adapter->mlmepriv.roam_scan_order); i++)
 				adapter->mlmepriv.roam_scan_order[i] = \
@@ -1131,18 +1307,27 @@ ssize_t proc_set_roam_flags(struct file *file, const char __user *buffer, size_t
 	return count;
 }
 
+#ifdef PRIVATE_N
 int proc_get_roam_param(struct seq_file *m, void *v)
 {
 	struct net_device *dev = m->private;
 	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
 	struct mlme_priv *mlme = &adapter->mlmepriv;
 
-	RTW_PRINT_SEL(m, "%12s %15s %26s %16s\n", "rssi_diff_th", "scanr_exp_ms", "scan_interval(unit:2 sec)", "rssi_threshold");
-	RTW_PRINT_SEL(m, "%-15u %-13u %-27u %-11u\n"
-		, mlme->roam_rssi_diff_th
+	RTW_PRINT_SEL(m, "%14s %16s %13s %21s %13s %13s\n"
+		, "idle_rssi_delta"
+		, "busy_rssi_delta"
+		, "scanr_exp_ms"
+		, "scan_int(unit:2 sec)"
+		, "idle_rssi_th"
+		, "busy_rssi_th");
+	RTW_PRINT_SEL(m, "%-16u %-16u %-13u %-21u %-13u %-13u\n"
+		, mlme->roam_idle_rssi_delta
+		, mlme->roam_busy_rssi_delta
 		, mlme->roam_scanr_exp_ms
 		, mlme->roam_scan_int
-		, mlme->roam_rssi_threshold
+		, mlme->roam_idle_rssi_th
+		, mlme->roam_busy_rssi_th
 	);
 
 	return 0;
@@ -1155,7 +1340,74 @@ ssize_t proc_set_roam_param(struct file *file, const char __user *buffer, size_t
 	struct mlme_priv *mlme = &adapter->mlmepriv;
 
 	char tmp[32];
-	u8 rssi_diff_th;
+	u8 idle_rssi_delta;
+	u8 busy_rssi_delta;
+	u32 scanr_exp_ms;
+	u32 scan_int;
+	u8 idle_rssi_th;
+	u8 busy_rssi_th;
+
+	if (count < 1)
+		return -EFAULT;
+
+	if (count > sizeof(tmp)) {
+		rtw_warn_on(1);
+		return -EFAULT;
+	}
+
+	if (buffer && !copy_from_user(tmp, buffer, count)) {
+
+		int num = sscanf(tmp, "%hhu %hhu %u %u %hhu %hhu"
+			, &idle_rssi_delta
+			, &busy_rssi_delta
+			, &scanr_exp_ms
+			, &scan_int
+			, &idle_rssi_th
+			, &busy_rssi_th);
+
+		if (num >= 1)
+			mlme->roam_idle_rssi_delta = idle_rssi_delta;
+		if (num >= 2)
+			mlme->roam_busy_rssi_delta = busy_rssi_delta;
+		if (num >= 3)
+			mlme->roam_scanr_exp_ms = scanr_exp_ms;
+		if (num >= 4)
+			mlme->roam_scan_int = scan_int;
+		if (num >= 5)
+			mlme->roam_idle_rssi_th = idle_rssi_th;
+		if (num >= 6)
+			mlme->roam_busy_rssi_th = busy_rssi_th;
+	}
+
+	return count;
+
+}
+#else
+int proc_get_roam_param(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
+	struct mlme_priv *mlme = &adapter->mlmepriv;
+
+	RTW_PRINT_SEL(m, "%12s %15s %26s %16s\n", "rssi_diff_th", "scanr_exp_ms", "scan_interval(unit:2 sec)", "rssi_threshold");
+	RTW_PRINT_SEL(m, "%-15u %-13u %-27u %-11u\n"
+		, mlme->roam_rssi_delta
+		, mlme->roam_scanr_exp_ms
+		, mlme->roam_scan_int
+		, mlme->roam_rssi_th
+	);
+
+	return 0;
+}
+
+ssize_t proc_set_roam_param(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
+	struct mlme_priv *mlme = &adapter->mlmepriv;
+
+	char tmp[32];
+	u8 rssi_delta;
 	u32 scanr_exp_ms;
 	u32 scan_int;
 	u8 rssi_threshold;
@@ -1170,21 +1422,22 @@ ssize_t proc_set_roam_param(struct file *file, const char __user *buffer, size_t
 
 	if (buffer && !copy_from_user(tmp, buffer, count)) {
 
-		int num = sscanf(tmp, "%hhu %u %u %hhu", &rssi_diff_th, &scanr_exp_ms, &scan_int, &rssi_threshold);
+		int num = sscanf(tmp, "%hhu %u %u %hhu", &rssi_delta, &scanr_exp_ms, &scan_int, &rssi_threshold);
 
 		if (num >= 1)
-			mlme->roam_rssi_diff_th = rssi_diff_th;
+			mlme->roam_rssi_delta = rssi_delta;
 		if (num >= 2)
 			mlme->roam_scanr_exp_ms = scanr_exp_ms;
 		if (num >= 3)
 			mlme->roam_scan_int = scan_int;
 		if (num >= 4)
-			mlme->roam_rssi_threshold = rssi_threshold;
+			mlme->roam_rssi_th = rssi_threshold;
 	}
 
 	return count;
 
 }
+#endif
 
 ssize_t proc_set_roam_tgt_addr(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
 {
@@ -1880,180 +2133,6 @@ int proc_get_trx_info(struct seq_file *m, void *v)
 	return 0;
 }
 
-static const char *rtw_data_rate_str(enum rtw_data_rate rate)
-{
-	if (rate >= RTW_DATA_RATE_CCK1 && rate <= RTW_DATA_RATE_CCK11) {
-		switch (rate) {
-#define CASE_CCK_RATE(cck)	case RTW_DATA_RATE_CCK ## cck: return "CCK_" # cck "M"
-		CASE_CCK_RATE(1);
-		CASE_CCK_RATE(2);
-		CASE_CCK_RATE(5_5);
-		CASE_CCK_RATE(11);
-#undef CASE_CCK_RATE
-		default:
-			return "CCK_UNKNOWN";
-		}
-	} else if (rate >= RTW_DATA_RATE_OFDM6 && rate <= RTW_DATA_RATE_OFDM54) {
-		switch (rate) {
-#define CASE_OFDM_RATE(ofdm)	case RTW_DATA_RATE_OFDM ## ofdm: return "OFDM_" # ofdm "M"
-		CASE_OFDM_RATE(6);
-		CASE_OFDM_RATE(9);
-		CASE_OFDM_RATE(12);
-		CASE_OFDM_RATE(18);
-		CASE_OFDM_RATE(24);
-		CASE_OFDM_RATE(36);
-		CASE_OFDM_RATE(48);
-		CASE_OFDM_RATE(54);
-#undef CASE_OFDM_RATE
-		default:
-			return "OFDM_UNKNOWN";
-		}
-	} else if (rate >= RTW_DATA_RATE_MCS0 && rate <= RTW_DATA_RATE_MCS31) {
-		switch (rate) {
-#define CASE_HT_RATE(mcs)	case RTW_DATA_RATE_MCS ## mcs: return "MCS_" # mcs
-		CASE_HT_RATE(0);
-		CASE_HT_RATE(1);
-		CASE_HT_RATE(2);
-		CASE_HT_RATE(3);
-		CASE_HT_RATE(4);
-		CASE_HT_RATE(5);
-		CASE_HT_RATE(6);
-		CASE_HT_RATE(7);
-		CASE_HT_RATE(8);
-		CASE_HT_RATE(9);
-		CASE_HT_RATE(10);
-		CASE_HT_RATE(11);
-		CASE_HT_RATE(12);
-		CASE_HT_RATE(13);
-		CASE_HT_RATE(14);
-		CASE_HT_RATE(15);
-		CASE_HT_RATE(16);
-		CASE_HT_RATE(17);
-		CASE_HT_RATE(18);
-		CASE_HT_RATE(19);
-		CASE_HT_RATE(20);
-		CASE_HT_RATE(21);
-		CASE_HT_RATE(22);
-		CASE_HT_RATE(23);
-		CASE_HT_RATE(24);
-		CASE_HT_RATE(25);
-		CASE_HT_RATE(26);
-		CASE_HT_RATE(27);
-		CASE_HT_RATE(28);
-		CASE_HT_RATE(29);
-		CASE_HT_RATE(30);
-		CASE_HT_RATE(31);
-#undef CASE_HT_RATE
-		default:
-			return "HT_UNKNOWN";
-		}
-	} else if (rate >= RTW_DATA_RATE_VHT_NSS1_MCS0 && rate <= RTW_DATA_RATE_VHT_NSS4_MCS9) {
-		switch (rate) {
-#define CASE_VHT_RATE(ss, mcs)	case RTW_DATA_RATE_VHT_NSS ## ss ##_MCS ##mcs: return "VHT_SS" #ss "MCS" #mcs
-		CASE_VHT_RATE(1, 0);
-		CASE_VHT_RATE(1, 1);
-		CASE_VHT_RATE(1, 2);
-		CASE_VHT_RATE(1, 3);
-		CASE_VHT_RATE(1, 4);
-		CASE_VHT_RATE(1, 5);
-		CASE_VHT_RATE(1, 6);
-		CASE_VHT_RATE(1, 7);
-		CASE_VHT_RATE(1, 8);
-		CASE_VHT_RATE(1, 9);
-		CASE_VHT_RATE(2, 0);
-		CASE_VHT_RATE(2, 1);
-		CASE_VHT_RATE(2, 2);
-		CASE_VHT_RATE(2, 3);
-		CASE_VHT_RATE(2, 4);
-		CASE_VHT_RATE(2, 5);
-		CASE_VHT_RATE(2, 6);
-		CASE_VHT_RATE(2, 7);
-		CASE_VHT_RATE(2, 8);
-		CASE_VHT_RATE(2, 9);
-		CASE_VHT_RATE(3, 0);
-		CASE_VHT_RATE(3, 1);
-		CASE_VHT_RATE(3, 2);
-		CASE_VHT_RATE(3, 3);
-		CASE_VHT_RATE(3, 4);
-		CASE_VHT_RATE(3, 5);
-		CASE_VHT_RATE(3, 6);
-		CASE_VHT_RATE(3, 7);
-		CASE_VHT_RATE(3, 8);
-		CASE_VHT_RATE(3, 9);
-		CASE_VHT_RATE(4, 0);
-		CASE_VHT_RATE(4, 1);
-		CASE_VHT_RATE(4, 2);
-		CASE_VHT_RATE(4, 3);
-		CASE_VHT_RATE(4, 4);
-		CASE_VHT_RATE(4, 5);
-		CASE_VHT_RATE(4, 6);
-		CASE_VHT_RATE(4, 7);
-		CASE_VHT_RATE(4, 8);
-		CASE_VHT_RATE(4, 9);
-#undef CASE_VHT_RATE
-		default:
-			return "VHT_UNKNOWN";
-		}
-	} else if (rate >= RTW_DATA_RATE_HE_NSS1_MCS0 && rate <= RTW_DATA_RATE_HE_NSS4_MCS11) {
-		switch (rate) {
-#define CASE_HE_RATE(ss, mcs)	case RTW_DATA_RATE_HE_NSS ## ss ##_MCS ##mcs: return "HE_SS" #ss "MCS" #mcs
-		CASE_HE_RATE(1, 0);
-		CASE_HE_RATE(1, 1);
-		CASE_HE_RATE(1, 2);
-		CASE_HE_RATE(1, 3);
-		CASE_HE_RATE(1, 4);
-		CASE_HE_RATE(1, 5);
-		CASE_HE_RATE(1, 6);
-		CASE_HE_RATE(1, 7);
-		CASE_HE_RATE(1, 8);
-		CASE_HE_RATE(1, 9);
-		CASE_HE_RATE(1, 10);
-		CASE_HE_RATE(1, 11);
-		CASE_HE_RATE(2, 0);
-		CASE_HE_RATE(2, 1);
-		CASE_HE_RATE(2, 2);
-		CASE_HE_RATE(2, 3);
-		CASE_HE_RATE(2, 4);
-		CASE_HE_RATE(2, 5);
-		CASE_HE_RATE(2, 6);
-		CASE_HE_RATE(2, 7);
-		CASE_HE_RATE(2, 8);
-		CASE_HE_RATE(2, 9);
-		CASE_HE_RATE(2, 10);
-		CASE_HE_RATE(2, 11);
-		CASE_HE_RATE(3, 0);
-		CASE_HE_RATE(3, 1);
-		CASE_HE_RATE(3, 2);
-		CASE_HE_RATE(3, 3);
-		CASE_HE_RATE(3, 4);
-		CASE_HE_RATE(3, 5);
-		CASE_HE_RATE(3, 6);
-		CASE_HE_RATE(3, 7);
-		CASE_HE_RATE(3, 8);
-		CASE_HE_RATE(3, 9);
-		CASE_HE_RATE(3, 10);
-		CASE_HE_RATE(3, 11);
-		CASE_HE_RATE(4, 0);
-		CASE_HE_RATE(4, 1);
-		CASE_HE_RATE(4, 2);
-		CASE_HE_RATE(4, 3);
-		CASE_HE_RATE(4, 4);
-		CASE_HE_RATE(4, 5);
-		CASE_HE_RATE(4, 6);
-		CASE_HE_RATE(4, 7);
-		CASE_HE_RATE(4, 8);
-		CASE_HE_RATE(4, 9);
-		CASE_HE_RATE(4, 10);
-		CASE_HE_RATE(4, 11);
-#undef CASE_HE_RATE
-		default:
-			return "HE_UNKNOWN";
-		}
-	}
-
-	return "ALL_UNKNOWN";
-}
-
 int proc_get_rate_ctl(struct seq_file *m, void *v)
 {
 	struct net_device *dev = m->private;
@@ -2741,14 +2820,6 @@ int proc_get_trx_info_debug(struct seq_file *m, void *v)
 {
 	struct net_device *dev = m->private;
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
-	/* ToDo CONFIG_RTW_MLD: [currently primary link only] */
-	struct _ADAPTER_LINK *padapter_link = GET_PRIMARY_LINK(padapter);
-
-	/*============  tx info ============	*/
-	rtw_hal_get_def_var(padapter, padapter_link, HW_DEF_RA_INFO_DUMP, m);
-
-	/*============  rx info ============	*/
-	/*rtw_hal_set_phydm_var(padapter, HAL_PHYDM_RX_INFO_DUMP, m, _FALSE);*/
 
 	return 0;
 }
@@ -3577,10 +3648,10 @@ int proc_get_dyn_rrsr(struct seq_file *m, void *v) {
 	struct registry_priv *pregpriv = &padapter->registrypriv;
 	u32 init_rrsr =0xFFFFFFFF;
 
-	if (padapter) 
+	if (padapter)
 		RTW_PRINT_SEL(m, "en_dyn_rrsr = %d fixed_rrsr_value =0x%x %s\n"
 			, pregpriv->en_dyn_rrsr
-			, pregpriv->set_rrsr_value 
+			, pregpriv->set_rrsr_value
 			, (pregpriv->set_rrsr_value == init_rrsr)?"(default)":"(fixed)"
 		);
 
@@ -3967,6 +4038,7 @@ int proc_get_all_sta_info(struct seq_file *m, void *v)
 	struct sta_priv *pstapriv = &padapter->stapriv;
 	int i;
 	_list	*plist, *phead;
+	u32 tx_tp_mbips, rx_tp_mbips;
 	char mac_addr_str[MAC_FMT_LEN];
 
 	RTW_MAP_DUMP_SEL_ALWAYS(m, "sta_dz_bitmap=", pstapriv->sta_dz_bitmap, pstapriv->aid_bmp_len);
@@ -4081,17 +4153,23 @@ int proc_get_all_sta_info(struct seq_file *m, void *v)
 				RTW_PRINT_SEL(m, "rx_uc_bytes=%llu\n", sta_rx_uc_bytes(psta));
 				RTW_PRINT_SEL(m, "rx_mc_bytes=%llu\n", psta->sta_stats.rx_mc_bytes);
 				RTW_PRINT_SEL(m, "rx_bc_bytes=%llu\n", psta->sta_stats.rx_bc_bytes);
-				if (psta->sta_stats.rx_tp_kbits >> 10)
-					RTW_PRINT_SEL(m, "rx_tp =%d (Mbps)\n", psta->sta_stats.rx_tp_kbits >> 10);
+
+				rx_tp_mbips = psta->phl_sta->stats.rx_tp_kbits >> 10;
+
+				if (rx_tp_mbips)
+					RTW_PRINT_SEL(m, "rx_tp =%d (Mbps)\n", rx_tp_mbips);
 				else
-					RTW_PRINT_SEL(m, "rx_tp =%d (Kbps)\n", psta->sta_stats.rx_tp_kbits);
+					RTW_PRINT_SEL(m, "rx_tp =%d (Kbps)\n", psta->phl_sta->stats.rx_tp_kbits);
 
 				RTW_PRINT_SEL(m, "tx_data_pkts=%llu\n", psta->sta_stats.tx_pkts);
 				RTW_PRINT_SEL(m, "tx_bytes=%llu\n", psta->sta_stats.tx_bytes);
-				if (psta->sta_stats.tx_tp_kbits >> 10)
-					RTW_PRINT_SEL(m, "tx_tp =%d (Mbps)\n", psta->sta_stats.tx_tp_kbits >> 10);
+
+				tx_tp_mbips = psta->phl_sta->stats.tx_tp_kbits >> 10;
+				if (tx_tp_mbips)
+					RTW_PRINT_SEL(m, "tx_tp =%d (Mbps)\n", tx_tp_mbips);
 				else
-					RTW_PRINT_SEL(m, "tx_tp =%d (Kbps)\n", psta->sta_stats.tx_tp_kbits);
+					RTW_PRINT_SEL(m, "tx_tp =%d (Kbps)\n", psta->phl_sta->stats.tx_tp_kbits);
+
 #if defined(CONFIG_RTW_80211K) || defined(CONFIG_RTW_FSM_RRM)
 				RTW_PRINT_SEL(m, "rm_en_cap="RM_CAP_FMT"\n", RM_CAP_ARG(psta->rm_en_cap));
 #endif
@@ -4700,7 +4778,7 @@ ssize_t proc_set_wow_enable(struct file *file, const char __user *buffer,
 	int num = 0;
 	int mode = 0;
 
-	if (count < 1) 
+	if (count < 1)
 		return -EFAULT;
 
 	if (count > sizeof(tmp)) {
@@ -4708,9 +4786,9 @@ ssize_t proc_set_wow_enable(struct file *file, const char __user *buffer,
 		return -EFAULT;
 	}
 
-	if (buffer && !copy_from_user(tmp, buffer, count)) 
+	if (buffer && !copy_from_user(tmp, buffer, count))
 		num = sscanf(tmp, "%d", &mode);
-	else 
+	else
 		return -EFAULT;
 
 	if (num != 1) {
@@ -4875,7 +4953,7 @@ ssize_t proc_set_wakeup_event(struct file *file, const char __user *buffer,
 	}
 
 	if (buffer && !copy_from_user(tmp, buffer, count))
-		num = sscanf(tmp, "%u", &wakeup_event);
+		num = sscanf(tmp, "%x", &wakeup_event);
 	else
 		return -EFAULT;
 
@@ -4932,6 +5010,745 @@ int proc_get_wake_indication(struct seq_file *m, void *v)
 
 	return 0;
 }
+
+#ifdef CONFIG_MDNS_OFFLOAD
+#define MDNS_RESP_PROC_BUF_LEN 1027 /* MAX_MDNS_RESP_LEN * 2 + 3 */
+#define MDNS_RESP_STR_BUF_LEN 1025  /* MAX_MDNS_RESP_LEN * 2 + 1 */
+#define MDNS_PASSTHRU_PROC_BUF_LEN 511 /* MAX_MDNS_DOMAIN_NAME_LEN * 2 + 1 */
+static void _parse_mdns_domain_name(struct seq_file *m, u8 *buf, u16 buf_len, u16 cur_offset, u8 *name_len)
+{
+	u8 name[255] = {0};
+	u8 lable_remain_len = 0;
+	u16 name_ptr = 0;
+	u16 len = 0;
+
+	while (1) {
+		if (cur_offset >= buf_len || len >= 255) {
+			len = 0;
+			goto exit;
+		}
+
+		if (!lable_remain_len) {
+			/* compression label */
+			if ((buf[cur_offset] & 0xc0) == 0xc0) {
+				if (cur_offset + 1 >= buf_len) {
+					len = 0;
+					goto exit;
+				}
+
+				name_ptr = ((buf[cur_offset] & 0x3f) << 8) +
+					   buf[cur_offset + 1];
+				if (name_ptr >= cur_offset) {
+					len = 0;
+					goto exit;
+				}
+				cur_offset = name_ptr;
+			}
+
+			/* label length */
+			if (buf[cur_offset] > 63) {
+				len = 0;
+				goto exit;
+			}
+
+			if (buf[cur_offset] == 0) {
+				name[len] = '\0';
+				len += 1;
+				goto exit;
+			} else {
+				name[len] = '.';
+				len += 1;
+				lable_remain_len = buf[cur_offset];
+				cur_offset++;
+			}
+		} else {
+			buf[cur_offset] = tolower(buf[cur_offset]);
+			name[len] = buf[cur_offset];
+			len += 1;
+			lable_remain_len = lable_remain_len - 1;
+			cur_offset++;
+		}
+	}
+
+exit:
+	if (name_len)
+		*name_len = (u8)len;
+
+	if (len) {
+		if (m)
+			RTW_PRINT_SEL(m, "domain name=%s\n", name + 1);
+		else
+			RTW_DBG("domain name=%s\n", name + 1);
+	} else
+		RTW_PRINT_SEL(m, "domain name parsing failed\n");
+}
+
+ssize_t proc_set_wow_mdns_resp(struct file *file, const char __user *buffer,
+			       size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	char *tmp = NULL;
+	u8 resp_idx = 0;
+	u8 *mdns_resp = NULL;
+	int err = 0;
+	int num, i;
+	size_t resp_str_len = 0;
+	u16 resp_hex_len = 0;
+
+	if (!padapter) {
+		err = -EFAULT;
+		goto exit;
+	}
+
+	tmp = rtw_zvmalloc(MDNS_RESP_PROC_BUF_LEN);
+	mdns_resp = rtw_zvmalloc(MDNS_RESP_STR_BUF_LEN);
+	if (!tmp || !mdns_resp) {
+		RTW_INFO("alloc buffer failed\n");
+		err = -EFAULT;
+		goto exit;
+	}
+
+	if (count < 1 || count > MDNS_RESP_PROC_BUF_LEN) {
+		RTW_INFO("argument size not available\n");
+		err = -EINVAL;
+		goto exit;
+	}
+
+	if (!buffer || copy_from_user(tmp, buffer, count)) {
+		err = -EFAULT;
+		goto exit;
+	}
+
+	if (strncmp(tmp, "clear", 5) == 0) {
+		RTW_INFO("clear all mdns resp\n");
+		for (i = 0; i < MAX_MDNS_RESP_NUM; i++)
+			rtw_wow_del_mdns_resp(padapter, i);
+		goto exit;
+	}
+
+	num = sscanf(tmp, "%hhu %s", &resp_idx, mdns_resp);
+	if ((num < 1) || (resp_idx > (MAX_MDNS_RESP_NUM - 1))) {
+		RTW_INFO("argument unavailable\n");
+		err = -EINVAL;
+		goto exit;
+	} else if (num == 1) {
+		RTW_INFO("remove mdns resp(%d)\n", resp_idx);
+		rtw_wow_del_mdns_resp(padapter, resp_idx);
+	} else {
+		resp_str_len = strlen(mdns_resp);
+		if (resp_str_len % 2 != 0) {
+			err = -EINVAL;
+			RTW_INFO("mdns_resp content format is incorrect\n");
+			goto exit;
+		}
+
+		for (i = 0; i < resp_str_len; i += 2) {
+			mdns_resp[resp_hex_len] = key_2char2num(mdns_resp[i], mdns_resp[i + 1]);
+			resp_hex_len++;
+		}
+
+		rtw_wow_add_mdns_resp(padapter, resp_idx, mdns_resp, resp_hex_len);
+	}
+
+exit:
+	if (tmp)
+		rtw_vmfree(tmp, MDNS_RESP_PROC_BUF_LEN);
+	if (mdns_resp)
+		rtw_vmfree(mdns_resp, MDNS_RESP_STR_BUF_LEN);
+
+	return err ? err : count;
+}
+
+int proc_get_wow_mdns_resp(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct rtw_mdns_resp_entry *resp_entry = NULL;
+	u8 resp_idx = 0;
+	u16 i = 0;
+
+	if (!padapter)
+		goto exit;
+
+	for (resp_idx = 0; resp_idx < MAX_MDNS_RESP_NUM; resp_idx++) {
+		rtw_wow_get_mdns_resp_ent(padapter, resp_idx, &resp_entry);
+
+		RTW_PRINT_SEL(m, "mdns resp(%d):", resp_idx);
+
+		if (resp_entry->content_len == 0) {
+			RTW_PRINT_SEL(m, "\n");
+			continue;
+		}
+
+		for (i = 0; i < resp_entry->content_len; i++) {
+			if (i % 32 == 0)
+				RTW_PRINT_SEL(m, "\n");
+			RTW_PRINT_SEL(m, "%02x", resp_entry->content[i]);
+		}
+		RTW_PRINT_SEL(m, "\n");
+	}
+
+exit:
+	return 0;
+}
+
+ssize_t proc_set_wow_mdns_match_criteria(struct file *file,
+					 const char __user *buffer,
+					 size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct rtw_mdns_resp_entry *resp_entry = NULL;
+	char tmp[13] = {0};
+	u8 resp_idx = 0;
+	u16 match_type = 0;
+	u16 name_offset = 0;
+	u8 name_len = 0;
+	int err = 0;
+	int num = 0;
+
+	if (!padapter) {
+		err = -EFAULT;
+		goto exit;
+	}
+
+	if (count < 1 || count > sizeof(tmp)) {
+		RTW_INFO("argument size not available\n");
+		err = -EINVAL;
+		goto exit;
+	}
+
+	if (!buffer || copy_from_user(tmp, buffer, count)) {
+		err = -EFAULT;
+		goto exit;
+	}
+
+	num = sscanf(tmp, "%hhu %hu %hu", &resp_idx, &match_type, &name_offset);
+	if ((num < 1) || num == 2 || (resp_idx > (MAX_MDNS_RESP_NUM - 1))) {
+		RTW_INFO("argument unavailable\n");
+		err = -EINVAL;
+	} else if (num == 1) {
+		RTW_INFO("remove mdns resp(%d) match criteria\n", resp_idx);
+		rtw_wow_del_mdns_match_crit(padapter, resp_idx);
+	} else {
+		rtw_wow_get_mdns_resp_ent(padapter, resp_idx, &resp_entry);
+		if (resp_entry->content_len == 0) {
+			RTW_INFO("mdns resp(%d) is empty\n", resp_idx);
+			err = -EFAULT;
+			goto exit;
+		}
+
+		_parse_mdns_domain_name(NULL, resp_entry->content,
+				       resp_entry->content_len,
+				       name_offset, &name_len);
+		if (name_len == 0) {
+			err = -EINVAL;
+			goto exit;
+		}
+
+		RTW_INFO("name_len=%3d\n", name_len);
+
+		rtw_wow_add_mdns_match_crit(padapter, resp_idx, match_type, name_offset, name_len);
+	}
+
+exit:
+	return err ? err : count;
+}
+
+int proc_get_wow_mdns_match_criteria(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct rtw_mdns_resp_entry *resp_entry = NULL;
+	u8 resp_idx = 0;
+	u8 i = 0;
+
+	if (!padapter)
+		goto exit;
+
+	for (resp_idx = 0; resp_idx < MAX_MDNS_RESP_NUM; resp_idx++) {
+		rtw_wow_get_mdns_resp_ent(padapter, resp_idx, &resp_entry);
+
+		RTW_PRINT_SEL(m, "mdns resp(%d) match criteria:\n", resp_idx);
+
+		for (i = 0; i < resp_entry->match_ct_num; i++) {
+			RTW_PRINT_SEL(m, "type=%5d, name_offset=%3d, name_len=%3d\n",
+				      resp_entry->match_ct[i].type,
+				      resp_entry->match_ct[i].name_offset,
+				      resp_entry->match_ct[i].name_len);
+			_parse_mdns_domain_name(m, resp_entry->content,
+						resp_entry->content_len,
+						resp_entry->match_ct[i].name_offset,
+						NULL);
+		}
+	}
+
+exit:
+	return 0;
+}
+
+ssize_t proc_set_wow_mdns_passthru_list(struct file *file,
+					const char __user *buffer,
+					size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	char tmp[MDNS_PASSTHRU_PROC_BUF_LEN] = {0};
+	u16 name_buf_len = 0;
+	u8 name_len = 0;
+	int err = 0;
+	u16 i = 0;
+
+	if (!padapter) {
+		err = -EFAULT;
+		goto exit;
+	}
+
+	if (count < 1 || count > sizeof(tmp)) {
+		RTW_INFO("argument size not available\n");
+		err = -EFAULT;
+		goto exit;
+	}
+
+	if (!buffer || copy_from_user(tmp, buffer, count)) {
+		err = -EFAULT;
+		goto exit;
+	}
+
+	if (strncmp(tmp, "clear", 5) == 0) {
+		RTW_INFO("clear passthru list\n");
+		rtw_wow_clr_mdns_passthru_name(padapter);
+	} else {
+		if ((count - 1) % 2 != 0) {
+			err = -EFAULT;
+			RTW_INFO("passthru name format is incorrect\n");
+			goto exit;
+		}
+
+		for (i = 0; i < count - 1 ; i += 2) {
+			tmp[name_buf_len] = key_2char2num(tmp[i], tmp[i+1]);
+			name_buf_len++;
+		}
+		_parse_mdns_domain_name(NULL, tmp, name_buf_len, 0, &name_len);
+
+		if (name_len == 0) {
+			err = -EFAULT;
+			goto exit;
+		}
+
+		if (_FAIL == rtw_wow_add_mdns_passthru_name(padapter, tmp, name_len)) {
+			err = -EFAULT;
+			goto exit;
+		}
+	}
+exit:
+	return err ? err : count;
+}
+
+int proc_get_wow_mdns_passthru_list(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct rtw_mdns_passthru_list *passthru_list = NULL;
+	u8 i = 0;
+
+	if (!padapter)
+		goto exit;
+
+	rtw_wow_get_mdns_passthru_list(padapter, &passthru_list);
+
+	RTW_PRINT_SEL(m, "mdns passthru list:\n");
+
+	for (i = 0; i < passthru_list->passthru_name_num; i++) {
+		RTW_PRINT_SEL(m, "name_len=%3d, ", passthru_list->passthru_name[i].name_len);
+		_parse_mdns_domain_name(m, passthru_list->passthru_name[i].name,
+					passthru_list->passthru_name[i].name_len,
+					0, NULL);
+	}
+
+exit:
+	return 0;
+}
+
+ssize_t proc_set_wow_mdns_offload_state(struct file *file,
+					    const char __user *buffer,
+					    size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	//struct pwrctrl_priv *pwrpriv;//ryan
+	struct wow_priv *wowpriv;//ryan
+	//struct dvobj_priv *dvobj = adapter_to_dvobj(padapter);//ryan
+	//struct phl_info_t *phl_info = GET_PHL_INFO(dvobj);//ryan
+	//struct phl_wow_info *wow_info = &phl_info->wow_info;//ryan
+	//struct rtw_mdns_ofld_info *ofld_info = &wow_info->mdns_ofld_info;//ryan
+	char tmp;
+	int err = 0;
+
+	if (!padapter) {
+		err = -EFAULT;
+		goto exit;
+	}
+
+	//pwrpriv = adapter_to_pwrctl(padapter);//ryan
+	wowpriv = adapter_to_wowlan(padapter);//ryan
+
+	if (count != 2) {
+		RTW_INFO("argument size not available\n");
+		err = -EINVAL;
+		goto exit;
+	}
+
+	if (!buffer || copy_from_user(&tmp, buffer, 1)) {
+		err = -EFAULT;
+		goto exit;
+	}
+
+	tmp = key_char2num(tmp);
+	if (tmp < 0 || tmp > 1)
+		RTW_INFO("Invalid mdns offload state!\n");
+	else
+		wowpriv->mdns_ofld_info.offload_state = tmp;//ryan
+		//mdns_info.offload_state = tmp;//ryan
+		//pwrpriv->mdns_ofld_info.offload_state = tmp;//ryan
+
+exit:
+	return err ? err : count;
+}
+
+int proc_get_wow_mdns_offload_state(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	//struct pwrctrl_priv *pwrpriv;//ryan
+	struct wow_priv *wowpriv;//ryan
+	//struct dvobj_priv *dvobj = adapter_to_dvobj(padapter);//ryan
+	//struct phl_info_t *phl_info = GET_PHL_INFO(dvobj);//ryan
+	//struct phl_wow_info *wow_info = &phl_info->wow_info;//ryan
+	//struct rtw_mdns_ofld_info *ofld_info = &wow_info->mdns_ofld_info;//ryan
+
+	if (!padapter)
+		goto exit;
+
+	//pwrpriv = adapter_to_pwrctl(padapter);//ryan
+	wowpriv = adapter_to_wowlan(padapter);//ryan
+
+	//RTW_PRINT_SEL(m, "%d\n", pwrpriv->mdns_ofld_info.offload_state);//ryan
+	RTW_PRINT_SEL(m, "%d\n", wowpriv->mdns_ofld_info.offload_state);//ryan
+	//RTW_PRINT_SEL(m, "%d\n", ofld_info.offload_state);//ryan
+
+exit:
+	return 0;
+}
+
+ssize_t proc_set_wow_mdns_passthru_behavior(struct file *file,
+					    const char __user *buffer,
+					    size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	//struct pwrctrl_priv *pwrpriv = adapter_to_pwrctl(padapter);//ryan
+	//struct wow_priv *wowpriv = adapter_to_wowlan(padapter);//ryan
+	struct rtw_mdns_passthru_list *passthru_list = NULL;
+	char tmp;
+	int err = 0;
+
+	if (!padapter) {
+		err = -EFAULT;
+		goto exit;
+	}
+
+	if (count != 2) {
+		RTW_INFO("argument size not available\n");
+		err = -EINVAL;
+		goto exit;
+	}
+
+	if (!buffer || copy_from_user(&tmp, buffer, 1)) {
+		err = -EFAULT;
+		goto exit;
+	}
+
+	tmp = key_char2num(tmp);
+	if (tmp < 0 || tmp > 2) {
+		RTW_INFO("Invalid passthrough behavior!\n");
+	} else {
+		rtw_wow_get_mdns_passthru_list(padapter, &passthru_list);
+		passthru_list->passthru_behavior = tmp;
+	}
+
+exit:
+	return err ? err : count;
+}
+
+int proc_get_wow_mdns_passthru_behavior(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct rtw_mdns_passthru_list *passthru_list;
+
+	if (!padapter)
+		goto exit;
+
+	rtw_wow_get_mdns_passthru_list(padapter, &passthru_list);
+
+	RTW_PRINT_SEL(m, "%d\n", passthru_list->passthru_behavior);
+
+exit:
+	return 0;
+}
+#endif /* CONFIG_MDNS_OFFLOAD */
+
+#ifdef CONFIG_APF
+enum _apf_cmd {
+	CMD_ENABLE,
+	CMD_DISABLE,
+	CMD_STANDBY,
+	CMD_MACHDR,
+	CMD_SET,
+	CMD_GET,
+	CMD_CLEAR,
+	CMD_SCREEN_MODE,
+	CMD_FORCE_DIS,
+	APF_CMD_MAX,
+};
+
+const char *_apf_cmd_str[APF_CMD_MAX] = {
+	"enable",
+	"disable",
+	"standby",
+	"machdr",
+	"set",
+	"get",
+	"clear",
+	"screen_mode",
+	"force_dis",
+};
+
+static enum _apf_cmd _str_to_cmd(const char *_str) {
+	int _len, _i;
+	if (!_str)
+		return APF_CMD_MAX;
+
+	for (_i = 0; _i < APF_CMD_MAX; _i++) {
+		_len = MIN(strlen(_str), strlen(_apf_cmd_str[_i]));
+		if (_rtw_memcmp(_str, _apf_cmd_str[_i], _len)) {
+			return (enum _apf_cmd)_i;
+		}
+	}
+	return APF_CMD_MAX;
+}
+
+#define APF_PROC_BUF_LEN (32 + MAX_APF_RAM_SIZE * 2)
+ssize_t proc_set_apf(struct file *file, const char __user *buffer,
+			       size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	struct _ADAPTER *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
+	struct phl_apf_info *info = &wowpriv->apf_info;
+
+	char *tmp = NULL, *apf_prog = NULL;
+	char cmd[16];
+	int num, i;
+	u32 screen_mode = 1, force_dis = 0;
+	size_t apf_str_len = 0;
+	u16 apf_hex_len = 0, apf_prog_len = 0;
+	enum phl_apf_cmd apf_cmd;
+
+	tmp = rtw_zvmalloc(APF_PROC_BUF_LEN);
+	apf_prog = rtw_zvmalloc(APF_PROC_BUF_LEN);
+	if (!tmp || !apf_prog) {
+		RTW_INFO("alloc buffer failed\n");
+		goto exit;
+	}
+	if (count < 1 || count > APF_PROC_BUF_LEN) {
+		RTW_INFO("argument size not available\n");
+		goto exit;
+	}
+
+	if (!buffer || copy_from_user(tmp, buffer, count)) {
+		goto exit;
+	}
+
+	num = sscanf(tmp, "%s %s", cmd, apf_prog);
+#ifdef CONFIG_APF_DBG
+	RTW_INFO("cmd:\"%s\" param:\"%s\"\n", cmd, apf_prog);
+#endif
+	switch(_str_to_cmd(cmd)) {
+		case CMD_ENABLE:
+			apf_cmd = PHL_APF_CMD_ENABLE;
+			goto apf_cmd_hdl;
+			break;
+		case CMD_DISABLE:
+			apf_cmd = PHL_APF_CMD_DISABLE;
+			goto apf_cmd_hdl;
+			break;
+		case CMD_STANDBY:
+			apf_cmd = PHL_APF_CMD_STANDBY;
+			goto apf_cmd_hdl;
+			break;
+		case CMD_MACHDR:
+			/* test purpose */
+			apf_cmd = PHL_APF_CMD_CHANGE;
+			info->mac_chg = 1;
+			goto apf_cmd_hdl;
+			break;
+		case CMD_SET:
+			apf_str_len = strlen(apf_prog);
+			for (i = 0; i < apf_str_len; i += 2) {
+				apf_prog[apf_hex_len] = key_2char2num(apf_prog[i], apf_prog[i + 1]);
+				apf_hex_len++;
+			}
+			if (apf_hex_len > MAX_APF_RAM_SIZE || apf_hex_len == 0) {
+				RTW_ERR("%s() APF program size(%u) exceed %u or zero\n",
+					__func__, apf_hex_len, MAX_APF_RAM_SIZE);
+				goto exit;
+			}
+			_rtw_memcpy(info->ram.buf, apf_prog, apf_hex_len);
+			info->ram.prog_len = apf_hex_len;
+			apf_cmd = PHL_APF_CMD_CHANGE;
+			goto apf_cmd_hdl;
+			break;
+		case CMD_GET:
+			wowpriv->dump_apf_ram = 1;
+			apf_cmd = PHL_APF_CMD_REPORT;
+			goto apf_cmd_hdl;
+			break;
+		case CMD_CLEAR:
+			apf_cmd = PHL_APF_CMD_CLEAR;
+			goto apf_cmd_hdl;
+			break;
+		case CMD_SCREEN_MODE:
+			apf_prog[1] = '\0';
+			if (apf_prog[0] == '0' || apf_prog[0] == '1') {
+				screen_mode = rtw_atoi(apf_prog);
+				wowpriv->screen_mode = screen_mode;
+				apf_cmd = (screen_mode == SCREEN_ON ? PHL_APF_CMD_STANDBY : PHL_APF_CMD_ENABLE);
+				goto apf_cmd_hdl;
+			} else {
+				RTW_INFO("%s() Wrong screen_mode param(%s)\n", __func__, apf_prog);
+				goto display_help;
+			}
+			break;
+		case CMD_FORCE_DIS:
+			apf_prog[1] = '\0';
+			if (apf_prog[0] == '0' || apf_prog[0] == '1') {
+				force_dis = rtw_atoi(apf_prog);
+				info->apf_force_dis = (enum phl_apf_force_en_state)force_dis;
+				RTW_INFO("%s() force disable APF(%s)\n", __func__,
+					 force_dis == 1 ? "DISABLE" : "IGNORE");
+				if (force_dis) {
+					apf_cmd = PHL_APF_CMD_STANDBY;
+					goto apf_cmd_hdl;
+				} else {
+					goto exit;
+				}
+			} else {
+				RTW_INFO("%s() Wrong force_dis param(%s)\n", __func__, apf_prog);
+				goto display_help;
+			}
+		default:
+			RTW_INFO("Unknown cmd(%s)\n", cmd);
+			goto display_help;
+			break;
+
+	}
+
+apf_cmd_hdl:
+	rtw_apf_cmd_hdl(padapter, apf_cmd);
+	goto exit;
+
+display_help:
+	RTW_INFO("===APF CMDS===\n");
+	RTW_INFO("[enable] : enable APF ");
+	RTW_INFO("    echo \"enable\" > apf\n");
+	RTW_INFO("[disable] : disable apf\n");
+	RTW_INFO("    echo \"disable\" > apf\n");
+	RTW_INFO("[standby] : standby apf\n");
+	RTW_INFO("    echo \"standby\" > apf\n");
+	RTW_INFO("[machdr] : !!Must after connected. set mac hdr for apf\n");
+	RTW_INFO("    echo \"machdr\" > apf\n");
+	RTW_INFO("[set] : set apf prog\n");
+	RTW_INFO("    echo \"set $APF_PROG\" > apf\n");
+	RTW_INFO("[get] : get apf ram\n");
+	RTW_INFO("    echo \"get\" > apf\n");
+	RTW_INFO("[clear] : clear apf ram\n");
+	RTW_INFO("    echo \"clear\" > apf\n");
+	RTW_INFO("[screen_mode] : set screen mode\n");
+	RTW_INFO("    echo \"screen_mode [0|1](on|off)\" > apf\n");
+	RTW_INFO("[force_dis] : set force disable mode\n");
+	RTW_INFO("    echo \"force_dis [0|1](ignore|disable)\" > apf\n");
+
+exit:
+	if (tmp)
+		rtw_vmfree(tmp, APF_PROC_BUF_LEN);
+	if (apf_prog)
+		rtw_vmfree(apf_prog, APF_PROC_BUF_LEN);
+
+	return count ;
+}
+
+int proc_get_apf(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
+	struct phl_apf_info *info = &wowpriv->apf_info;
+	u16 i = 0;
+
+	if (wowpriv->dump_apf_ram) {
+		if (info->ram.prog_len) {
+			RTW_INFO_DUMP("APF RAM:",info->ram.buf, MAX_APF_RAM_SIZE);
+			for (i = 0; i < MAX_APF_RAM_SIZE; i++) {
+				if (i % 16 == 0) {
+					RTW_PRINT_SEL(m, "\n%03X: ", i);
+				}
+				RTW_PRINT_SEL(m, "%02x ", info->ram.buf[i]);
+			}
+			RTW_PRINT_SEL(m, "\n\n");
+		} else {
+			RTW_PRINT_SEL(m, "APF ram is empty\n\n");
+		}
+		wowpriv->dump_apf_ram = 0;
+	}
+
+	RTW_PRINT_SEL(m, "===APF CMDS===\n");
+	RTW_PRINT_SEL(m, "[enable] : enable APF ");
+	RTW_PRINT_SEL(m, "    echo \"enable\" > apf\n");
+	RTW_PRINT_SEL(m, "[disable] : disable apf\n");
+	RTW_PRINT_SEL(m, "    echo \"disable\" > apf\n");
+	RTW_PRINT_SEL(m, "[standby] : standby apf\n");
+	RTW_PRINT_SEL(m, "    echo \"standby\" > apf\n");
+	RTW_PRINT_SEL(m, "[machdr] : !!Must after connected. set mac hdr for apf\n");
+	RTW_PRINT_SEL(m, "    echo \"machdr\" > apf\n");
+	RTW_PRINT_SEL(m, "[set] : set apf prog\n");
+	RTW_PRINT_SEL(m, "    echo \"set $APF_PROG\" > apf\n");
+	RTW_PRINT_SEL(m, "[get] : get apf ram\n");
+	RTW_PRINT_SEL(m, "    echo \"get\" > apf\n");
+	RTW_PRINT_SEL(m, "[clear] : clear apf ram\n");
+	RTW_PRINT_SEL(m, "    echo \"clear\" > apf\n");
+	RTW_PRINT_SEL(m, "[screen_mode] : set screen mode\n");
+	RTW_PRINT_SEL(m, "    echo \"screen_mode [0|1](on|off)\" > apf\n");
+	RTW_PRINT_SEL(m, "[force_dis] : set force disable mode\n");
+	RTW_PRINT_SEL(m, "    echo \"force_dis [0|1](ignore|disable)\" > apf\n\n");
+
+	RTW_PRINT_SEL(m, "==== APF INFO====\n");
+	RTW_PRINT_SEL(m, "cmd(%s) state(%s) screen_mode(%s) fw_mode(%s) force_dis(%u)\n",
+			 _apf_cmd_to_str(info->apf_cmd), _apf_state_to_str(info->apf_state),
+			 wowpriv->screen_mode == SCREEN_OFF ? "OFF" : "ON",
+			 info->fw_mode == RTW_FW_NIC ? "NIC" : "WOW",
+			 info->apf_force_dis);
+	RTW_PRINT_SEL(m, "prog_len(%u) ram_size(%u) ram_frag_size(%u) ram_frag_num(%u)\n",
+			  info->ram.prog_len, MAX_APF_RAM_SIZE, APF_RAM_FRAG_SIZE, info->ram_frag_num);
+
+
+exit:
+	return 0;
+}
+
+#endif /* CONFIG_APF */
 
 #ifdef CONFIG_GPIO_WAKEUP
 int proc_get_wowlan_gpio_info(struct seq_file *m, void *v)
@@ -5153,6 +5970,35 @@ int proc_get_p2p_wowlan_info(struct seq_file *m, void *v)
 	return 0;
 }
 #endif /* CONFIG_P2P_WOWLAN */
+
+#ifdef CONFIG_BCN_CNT_CONFIRM_HDL
+int proc_get_new_bcn_max(struct seq_file *m, void *v)
+{
+	extern int new_bcn_max;
+
+	RTW_PRINT_SEL(m, "%d\n", new_bcn_max);
+	return 0;
+}
+
+ssize_t proc_set_new_bcn_max(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
+{
+	char tmp[32];
+	extern int new_bcn_max;
+
+	if (count < 1)
+		return -EFAULT;
+
+	if (count > sizeof(tmp)) {
+		rtw_warn_on(1);
+		return -EFAULT;
+	}
+
+	if (buffer && !copy_from_user(tmp, buffer, count))
+		sscanf(tmp, "%d ", &new_bcn_max);
+
+	return count;
+}
+#endif
 
 #ifdef CONFIG_POWER_SAVE
 int proc_get_ps_info(struct seq_file *m, void *v)

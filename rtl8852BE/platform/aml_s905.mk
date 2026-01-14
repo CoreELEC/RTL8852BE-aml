@@ -11,7 +11,7 @@ endif
 
 # default setting for Android
 # config CONFIG_RTW_ANDROID in main Makefile
-
+ifeq ($(CONFIG_GKI_BAZEL), n)
 ARCH ?= arm64
 CROSS_COMPILE ?= /home/Jimmy/amlogic_905x4+8852AS/skw-rtk/cross_compile_toolchain/gcc-linaro-6.3.1-2017.02-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-
 ifndef KSRC
@@ -19,12 +19,12 @@ ifndef KSRC
 #KSRC += O=/home/sd4ce/sdk/amlogic_905x4_8852ae/KERNEL_OBJ
 KSRC := $(KERNEL_SRC)
 endif
-
 #Add by amlogic
 EXTRA_CFLAGS += -w -Wno-return-type
 EXTRA_CFLAGS += $(foreach d,$(shell test -d $(KERNEL_SRC)/$(M) && find $(shell cd $(KERNEL_SRC)/$(M);pwd) -type d),$(shell echo " -I$(d)"))
+endif
 ifeq ($(CONFIG_PCI_HCI), y)
-#EXTRA_CFLAGS += -DUSE_AML_PCIE_TEE_MEM
+EXTRA_CFLAGS += -DUSE_AML_PCIE_TEE_MEM
 endif
 
 ifeq ($(CONFIG_PCI_HCI), y)
@@ -37,6 +37,10 @@ OBJS += $(_PLATFORM_FILES)
 CONFIG_MSG_NUM = 128
 EXTRA_CFLAGS += -DCONFIG_MSG_NUM=$(CONFIG_MSG_NUM)
 EXTRA_CFLAGS += -DCONFIG_TX_SKB_ORPHAN
+EXTRA_CFLAGS += -DCONFIG_CPU_BALANCE
+EXTRA_CFLAGS += -DCONFIG_RTW_TX_AMSDU_USE_WQ
+EXTRA_CFLAGS += -DCONFIG_RTW_RX_HDL_USE_WQ
+EXTRA_CFLAGS += -DCONFIG_RTW_EVENT_HDL_USE_WQ
 # PHL Config
 #EXTRA_CFLAGS += -DRTW_WKARD_98D_RXTAG
 endif

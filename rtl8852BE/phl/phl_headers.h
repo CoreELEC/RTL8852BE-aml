@@ -66,7 +66,6 @@
 #include "phl_tx.h"
 #include "phl_rx_agg.h"
 #include "phl_rx.h"
-
 #include "phl_ser_def.h"
 #include "phl_sound_cmd.h"
 #include "phl_sound.h"
@@ -151,5 +150,6 @@
 
 #ifdef CONFIG_WIFI_7
 #endif
+#include "phl_int.h"
 
 #endif /*_PHL_HEADERS_H_*/

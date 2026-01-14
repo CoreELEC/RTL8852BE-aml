@@ -51,6 +51,7 @@ void rtw_cfg80211_nop_finished_event(struct rf_ctl_t *rfctl, u8 band_idx
 	, u8 band, u8 cch, enum channel_width bw);
 void rtw_cfg80211_nop_started_event(struct rf_ctl_t *rfctl, u8 band_idx
 	, u8 band, u8 cch, enum channel_width bw, bool called_on_cmd_thd);
+bool rtw_is_du_ndev(struct wiphy *wiphy, struct net_device *ndev);
 void rtw_regd_free_du_wdev(struct wiphy *wiphy);
 #else
 #define rtw_cfg80211_radar_detected_event(rfctl, band_idx, cch, bw) do {} while (0)
@@ -60,6 +61,7 @@ void rtw_regd_free_du_wdev(struct wiphy *wiphy);
 #define rtw_cfg80211_cac_force_finished(rfctl, band_idx, ifbmp, cch, bw) do {} while (0)
 #define rtw_cfg80211_nop_finished_event(rfctl, band_idx, band, cch, bw) do {} while (0)
 #define rtw_cfg80211_nop_started_event(rfctl, band_idx, band, cch, bw, called_on_cmd_thd) do {} while (0)
+#define rtw_is_du_ndev(wiphy, ndev) false
 #define rtw_regd_free_du_wdev(wiphy) do {} while (0)
 #endif /* CONFIG_RTW_CFG80211_CAC_EVENT */
 

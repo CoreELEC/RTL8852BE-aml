@@ -31,6 +31,24 @@ enum rf_path halbb_bb_path_2_rf_path(struct bb_info *bb, enum bb_path path_in)
 	return path_out;
 }
 
+void halbb_rf_path_2_tx_path_num(struct bb_info *bb, enum rf_path path_in)
+{
+	if (path_in == RF_PATH_A || path_in == RF_PATH_B || path_in == RF_PATH_C ||
+	     path_in == RF_PATH_D) {
+		bb->num_tx_path = 1;
+	} else if (path_in == RF_PATH_AB || path_in == RF_PATH_AC || path_in == RF_PATH_AD ||
+		 path_in == RF_PATH_BC || path_in == RF_PATH_BD || path_in == RF_PATH_CD) {
+		bb->num_tx_path = 2;
+	} else if (path_in == RF_PATH_ABC || path_in == RF_PATH_ABD || path_in == RF_PATH_ACD ||
+		 path_in == RF_PATH_BCD) {
+		bb->num_tx_path = 3;
+	} else if (path_in == RF_PATH_ABCD) {
+		bb->num_tx_path = 4;
+	} else {
+		BB_WARNING("[%s] Not support now, RF Path_in=%d\n", __func__, path_in);
+	}
+}
+
 enum bb_bw_type halbb_phl_2_bb_bw(struct bb_info *bb, enum channel_width phl_bw)
 {
 	enum bb_bw_type bb_bw = BB_BW_20M;
@@ -2096,6 +2114,8 @@ void halbb_ctrl_trx_path(struct bb_info *bb_0, enum rf_path tx_path, u8 tx_nss,
 	BB_DBG(bb, DBG_DBCC, "[%s]tx_path=%d, tx_nss=%d, rx_path=%d, rx_nss=%d\n",
 	       __func__, tx_path, tx_nss, rx_path, rx_nss);
 
+
+	halbb_rf_path_2_tx_path_num(bb, tx_path);
 	#ifdef HALBB_FW_OFLD_SUPPORT
 	halbb_fwofld_bitmap_en(bb, true, FW_OFLD_BB_API);
 	#endif
@@ -2177,11 +2197,15 @@ void halbb_cfg_trx_path(struct bb_info *bb_0, struct bb_tx_path_en_info tx_path_
 	halbb_mem_cpy(bb, &bb_path_div->bb_path_en_i, &tx_path_i, sizeof(struct bb_tx_path_en_info));
 #endif
 
-	if (tx_path_i.max_tx_path_en)
-		tx_bb_path_en = halbb_gen_mask_from_0(bb->num_ss);
-	else
+	if (tx_path_i.max_tx_path_en) {
+		if (bb->num_rf_path > bb->num_tx_path)
+			tx_bb_path_en = halbb_gen_mask_from_0(bb->num_tx_path);
+		else
+			tx_bb_path_en = halbb_gen_mask_from_0(bb->num_rf_path);
+	} else {
 		tx_bb_path_en = (enum bb_path)(tx_path_i.bb_path_1sts | tx_path_i.bb_path_2sts |
-				tx_path_i.bb_path_3sts | tx_path_i.bb_path_3sts);
+				tx_path_i.bb_path_3sts | tx_path_i.bb_path_4sts);
+	}
 
 	if (bb->bb_80211spec == BB_BE_IC)
 		halbb_ctrl_trx_path_7(bb, tx_bb_path_en, tx_path_i.max_tx_ss ,rx_path_i.rx_path_en, rx_path_i.rx_ss);
@@ -4894,11 +4918,15 @@ void halbb_update_tx_path_div(struct bb_info *bb, struct rtw_phl_stainfo_t *sta)
 
 	if (!(bb->support_ability & BB_PATH_DIV)) {
 		BB_DBG(bb, DBG_PATH_DIV, "Not support path diversity\n");
+		halbb_ctrl_tx_path_div(bb, halbb_gen_mask_from_0(bb->num_tx_path));
+		halbb_set_tx_path(bb, (u16)sta->macid, halbb_gen_mask_from_0(bb->num_tx_path));
 		return;
 	}
 
 	if (bb_path_div->is_disable_6g_pathdiv) {
 		BB_DBG(bb, DBG_PATH_DIV, "[%s], Early return due to disable 6G pathdiv\n",  __func__);
+		halbb_ctrl_tx_path_div(bb, halbb_gen_mask_from_0(bb->num_tx_path));
+		halbb_set_tx_path(bb, (u16)sta->macid, halbb_gen_mask_from_0(bb->num_tx_path));
 		return;
 	}
 
@@ -4915,8 +4943,8 @@ void halbb_update_tx_path_div(struct bb_info *bb, struct rtw_phl_stainfo_t *sta)
 		bb_path_div->path_sel[sta->macid] = path;
 		halbb_set_tx_path(bb, (u16)sta->macid, path);
 	} else {
-		halbb_ctrl_tx_path_div(bb, BB_PATH_AB);
-		halbb_set_tx_path(bb, (u16)sta->macid, BB_PATH_AB);
+		halbb_ctrl_tx_path_div(bb, halbb_gen_mask_from_0(bb->num_tx_path));
+		halbb_set_tx_path(bb, (u16)sta->macid, halbb_gen_mask_from_0(bb->num_tx_path));
 	}
 }
 #endif

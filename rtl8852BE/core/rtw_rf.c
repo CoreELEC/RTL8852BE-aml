@@ -890,13 +890,13 @@ static u8 rtw_get_center_ch_6g(u8 ch, u8 bw, u8 offset)
 	};
 	u8 cch = ch;
 
-	if (bw < CHANNEL_WIDTH_20 || bw > CHANNEL_WIDTH_160) {
+	if (bw == CHANNEL_WIDTH_20 || bw == CHANNEL_WIDTH_10 || bw == CHANNEL_WIDTH_5)
+		goto exit;
+
+	if (bw > CHANNEL_WIDTH_160) {
 		rtw_warn_on(1);
 		goto exit;
 	}
-
-	if (bw == CHANNEL_WIDTH_20)
-		goto exit;
 
 	cch = (((ch - 1) >> shift[bw]) << shift[bw]) + start[bw];
 

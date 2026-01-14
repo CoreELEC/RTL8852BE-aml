@@ -891,14 +891,21 @@ static bool phl_manage_sta_reorder_buf(struct phl_info_t *phl_info,
 		return true;
 	}
 
-	/*
+	/**
 	 * If frame the sequence number exceeds our buffering window
 	 * size release some previous frames to make room for this one.
 	 */
 	if (!seq_less(mpdu_seq_num, head_seq_num + buf_size)) {
-		head_seq_num = seq_inc(seq_sub(mpdu_seq_num, buf_size));
-		/* release stored frames up to new head to stack */
-		phl_release_reorder_frames(phl_info, r, head_seq_num, frames);
+		if (seq_less(mpdu_seq_num, head_seq_num + (SEQ_MODULO >> 1))) {
+			head_seq_num = seq_inc(seq_sub(mpdu_seq_num, buf_size));
+			/* release stored frames up to new head to stack */
+			phl_release_reorder_frames(phl_info, r, head_seq_num, frames);
+		} else {
+			PHL_TRACE(COMP_PHL_RECV, _PHL_WARNING_, "Rx drop (out of window): seq 0x%03x, head 0x%03x (tid=%u)\n",
+			          meta->seq, r->head_seq_num, r->tid);
+			hci_trx_ops->recycle_rx_pkt(phl_info, pkt);
+			return true;
+		}
 	}
 
 	/* Now the new frame is always in the range of the reordering buffer */
@@ -1331,13 +1338,16 @@ void rtw_phl_rx_bar(void *phl, struct rtw_phl_stainfo_t *sta, u8 tid, u16 seq)
 		return;
 	}
 
-	if (seq_less(seq, r->head_seq_num)) {
+	/* WinStart + 2^11 <= SSN <= WinStart */
+	if (seq_less(seq, r->head_seq_num) ||
+	    seq_less(r->head_seq_num + (SEQ_MODULO >> 1), seq)) {
 		_os_spinunlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
 		PHL_TRACE(COMP_PHL_RECV, _PHL_WARNING_, "%s: bar seq 0x%03x, preceding head 0x%03x (tid=%u)\n",
 				  __func__, seq, r->head_seq_num, tid);
 		return;
 	}
 
+	/* WinStart < SSN < WinStart + 2^11 */
 	PHL_TRACE(COMP_PHL_RECV, _PHL_INFO_, "%s: bar seq 0x%03x, head 0x%03x (tid=%u)\n",
 			  __func__, seq, r->head_seq_num, tid);
 

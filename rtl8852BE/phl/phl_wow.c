@@ -145,6 +145,34 @@ _phl_cfg_pkt_ofld_probe_req_info(struct phl_wow_info *wow_info,
 	}
 }
 
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+static void _phl_cfg_pkt_ofld_mdns_rsp_ipv4_info(struct phl_wow_info *wow_info, struct rtw_phl_stainfo_t *phl_sta,
+						struct rtw_mdns_ipv4_header *mdns_ipv4_hdr)
+{
+	void *drv_priv = phl_to_drvpriv(wow_info->phl_info);
+	u8 pairwise_algo = get_wow_pairwise_algo_type(wow_info);
+	struct dev_cap_t *dev_cap = &(wow_info->phl_info->phl_com->dev_cap);
+
+	mdns_ipv4_hdr->protect_bit = (pairwise_algo == RTW_ENC_NONE) ? false : true;
+
+	if (mdns_ipv4_hdr->protect_bit)
+		mdns_ipv4_hdr->sec_hdr_len = (_phl_chk_hw_form_sechdr(dev_cap, pairwise_algo)) ? 0 : _phl_query_iv_len(pairwise_algo);
+}
+
+static void _phl_cfg_pkt_ofld_mdns_rsp_ipv6_info(struct phl_wow_info *wow_info, struct rtw_phl_stainfo_t *phl_sta,
+						struct rtw_mdns_ipv6_header *mdns_ipv6_hdr)
+{
+	void *drv_priv = phl_to_drvpriv(wow_info->phl_info);
+	u8 pairwise_algo = get_wow_pairwise_algo_type(wow_info);
+	struct dev_cap_t *dev_cap = &(wow_info->phl_info->phl_com->dev_cap);
+
+	mdns_ipv6_hdr->protect_bit = (pairwise_algo == RTW_ENC_NONE) ? false : true;
+
+	if (mdns_ipv6_hdr->protect_bit)
+		mdns_ipv6_hdr->sec_hdr_len = (_phl_chk_hw_form_sechdr(dev_cap, pairwise_algo)) ? 0 : _phl_query_iv_len(pairwise_algo);
+}
+#endif /* CONFIG_PHL_MDNS_OFFLOAD */
+
 static void _phl_cfg_pkt_ofld_arp_rsp_info(struct phl_wow_info *wow_info, struct rtw_phl_stainfo_t *phl_sta,
 						struct rtw_pkt_ofld_arp_rsp_info *arp_rsp_info)
 {
@@ -409,6 +437,49 @@ void rtw_phl_cfg_periodic_wake_info(void *phl,
 	_os_mem_cpy(drv_priv, pw_info, info,
 		    sizeof(struct rtw_periodic_wake_info));
 }
+
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+void rtw_phl_cfg_mdns_ofld_info(void *phl, struct rtw_mdns_ofld_info *info)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
+	struct phl_wow_info *wow_info = phl_to_wow_info(phl_info);
+	void *drv_priv = phl_to_drvpriv(phl_info);
+
+	FUNCIN();
+
+	wow_info->mdns_ofld_info = info;
+
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] mdns_en %u\n",
+			wow_info->mdns_ofld_info->mdns_en);
+
+	if (!is_all_null(wow_info->mdns_ofld_info->mdns_ipv4_header.src_ipv4_addr, RTW_IP_ADDR_LEN))
+		PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] src_ipv4_addr  %u:%u:%u:%u\n",
+		          wow_info->mdns_ofld_info->mdns_ipv4_header.src_ipv4_addr[0],
+		          wow_info->mdns_ofld_info->mdns_ipv4_header.src_ipv4_addr[1],
+		          wow_info->mdns_ofld_info->mdns_ipv4_header.src_ipv4_addr[2],
+		          wow_info->mdns_ofld_info->mdns_ipv4_header.src_ipv4_addr[3]);
+	if (!is_all_null(wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr, RTW_IPv6_ADDR_LEN))
+		PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_,
+		          "[wow] src_ipv6_addr %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n",
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[0],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[1],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[2],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[3],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[4],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[5],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[6],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[7],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[8],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[9],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[10],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[11],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[12],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[13],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[14],
+		          wow_info->mdns_ofld_info->mdns_ipv6_header.src_ipv6_addr[15]);
+
+}
+#endif
 
 void rtw_phl_cfg_arp_ofld_info(void *phl, struct rtw_arp_ofld_info *info)
 {
@@ -1176,6 +1247,23 @@ phl_set_wowlan(struct phl_info_t *phl_info, u8 enter, bool disable_inband)
 #ifdef RTW_WKARD_DYNAMIC_PCIE_GEN
 		rtw_hal_pcie_gen_set(phl_info->hal, RTW_PCIE_GEN_2);
 #endif
+#ifdef CONFIG_PHL_APF
+		{
+			void *drv_priv = phl_to_drvpriv(phl_info);
+			struct phl_apf_info *info = phl_info->wow_info.apf_info;
+			struct phl_apf_cmd_blob *cmd_blob = NULL;
+
+			PHL_INFO("%s() Disable APF\n", __func__);
+			cmd_blob = _os_kmem_alloc(drv_priv, sizeof(struct phl_apf_cmd_blob));
+			if (cmd_blob) {
+				cmd_blob->cmd = PHL_APF_CMD_DISABLE;
+				info->wait_period = 10000;
+				rtw_phl_manipulate_apf((void *)phl_info, (u8*)cmd_blob);
+			} else {
+				PHL_ERR("%s() allocate memory for apf_cmd_blob fail\n", __func__);
+			}
+		}
+#endif
 	} else {
 		wow_ctrl = MAC_AX_WOW_LEAVE;
 	}
@@ -1304,16 +1392,8 @@ enum rtw_phl_status phl_wow_init_postcfg(struct phl_wow_info *wow_info)
 	struct phl_info_t *phl_info = wow_info->phl_info;
 	struct phl_hci_trx_ops *trx_ops = phl_info->hci_trx_ops;
 	struct rtw_phl_stainfo_t *sta = wow_info->sta;
-#ifdef CONFIG_SYNC_INTERRUPT
-	struct rtw_phl_evt_ops *evt_ops = &phl_info->phl_com->evt_ops;
-#endif /* CONFIG_SYNC_INTERRUPT */
 
-	/* disable interrupt */
-#ifdef CONFIG_SYNC_INTERRUPT
-	evt_ops->set_interrupt_caps(phl_to_drvpriv(phl_info), false);
-#else
-	rtw_hal_disable_interrupt(phl_info->phl_com, phl_info->hal);
-#endif /* CONFIG_SYNC_INTERRUPT */
+	rtw_phl_disable_interrupt_sync(phl_info->phl_com);
 
 	_wow_stop_datapath(phl_info, PHL_CTRL_RX);
 
@@ -1339,17 +1419,8 @@ enum rtw_phl_status phl_wow_init_postcfg(struct phl_wow_info *wow_info)
 
 static void _wow_initialize_interrupt(struct phl_info_t *phl_info)
 {
-#ifdef CONFIG_SYNC_INTERRUPT
-	struct rtw_phl_evt_ops *evt_ops = &phl_info->phl_com->evt_ops;
-#endif /* CONFIG_SYNC_INTERRUPT */
-
 	rtw_hal_init_int_default_value(phl_info->phl_com, phl_info->hal, INT_SET_OPT_HAL_INIT);
-
-#ifdef CONFIG_SYNC_INTERRUPT
-	evt_ops->set_interrupt_caps(phlcom_to_drvpriv(phl_info->phl_com), true);
-#else
-	rtw_hal_enable_interrupt(phl_info->phl_com, phl_info->hal);
-#endif /* CONFIG_SYNC_INTERRUPT */
+	rtw_phl_enable_interrupt_sync(phl_info->phl_com);
 }
 
 enum rtw_phl_status phl_wow_init(struct phl_wow_info *wow_info)
@@ -1456,7 +1527,6 @@ static void _phl_get_nlo_rpt(struct phl_wow_info *wow_info)
 		}
 	}
 }
-
 /*
  * return role map of excluded role from suspension
  */
@@ -1517,6 +1587,28 @@ enum rtw_phl_status phl_wow_deinit_precfg(struct phl_wow_info *wow_info)
 
 	_wow_initialize_interrupt(phl_info);
 
+#ifdef CONFIG_PHL_APF
+{
+	void *drv_priv = phl_to_drvpriv(phl_info);
+	struct phl_apf_info *info = phl_info->wow_info.apf_info;
+	struct phl_apf_cmd_blob *cmd_blob = NULL;
+
+	PHL_INFO("%s() Disable APF\n", __func__);
+	cmd_blob = _os_kmem_alloc(drv_priv, sizeof(struct phl_apf_cmd_blob));
+	if (cmd_blob) {
+		cmd_blob->cmd = PHL_APF_CMD_DISABLE;
+		info->wait_period = 10000;
+		rtw_phl_manipulate_apf((void *)phl_info, (u8*)cmd_blob);
+		if (wow_info->wake_rsn == RTW_MAC_WOW_FW_DECISION_DISCONNECT) {
+			PHL_INFO("%s() Disconnect resume, clear apf prog\n", __func__);
+			info->ram.prog_len = 0;
+		}
+	} else {
+		PHL_ERR("%s() allocate memory for apf_cmd_blob fail\n", __func__);
+	}
+}
+#endif
+
 	hstatus = _phl_handle_aoac_rpt_action(wow_info, true);
 	if (RTW_HAL_STATUS_SUCCESS != hstatus)
 		SET_WOW_DEINIT_ERR(wow_info, WOW_HANDLE_AOAC_RPT_PHASE1);
@@ -1572,11 +1664,25 @@ enum rtw_phl_status phl_wow_deinit_postcfg(struct phl_wow_info *wow_info)
 		if (RTW_HAL_STATUS_SUCCESS != hstatus)
 			SET_WOW_DEINIT_ERR(wow_info, WOW_PPDU_STS_CFG);
 	}
-
+#ifdef CONFIG_PHL_APF
+{
+	void *drv_priv = phl_to_drvpriv(phl_info);
+	struct phl_apf_cmd_blob *cmd_blob = NULL;
+	PHL_INFO("%s() Activate NICFW APF\n", __func__);
+	cmd_blob = _os_kmem_alloc(drv_priv, sizeof(struct phl_apf_cmd_blob));
+	if (cmd_blob) {
+		cmd_blob->fw_mode = RTW_FW_NIC;
+		cmd_blob->cmd = PHL_APF_CMD_CHG_FW;
+		rtw_phl_manipulate_apf((void*)phl_info, (u8*)cmd_blob);
+	} else {
+		PHL_ERR("%s() allocate memory for apf_cmd_blob fail\n", __func__);
+	}
+}
+#endif
 	return phl_status;
 }
 
-enum rtw_phl_status _phl_wow_cfg_pkt_ofld(struct phl_wow_info *wow_info, u8 pkt_type, u8 *pkt_id, void *buf)
+enum rtw_phl_status _phl_wow_cfg_pkt_ofld(struct phl_wow_info *wow_info, u8 pkt_type, u8 *pkt_id, void *buf, u8 ofld_idx)
 {
 	enum rtw_phl_status pstatus = RTW_PHL_STATUS_FAILURE;
 #ifdef CONFIG_PHL_PKTOFLD
@@ -1612,6 +1718,20 @@ enum rtw_phl_status _phl_wow_cfg_pkt_ofld(struct phl_wow_info *wow_info, u8 pkt_
 	case PKT_TYPE_PROBE_REQ:
 		token = &wow_info->probe_req_pkt_token;
 		break;
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+	case PKT_TYPE_MDNS_RSP_IPV4:
+		token = &wow_info->mdns_rsp_ipv4_token;
+		break;
+	case PKT_TYPE_MDNS_RSP_IPV6:
+		token = &wow_info->mdns_rsp_ipv6_token;
+		break;
+	case PKT_TYPE_MDNS_RSP_DATA:
+		token = &wow_info->mdns_rsp_data_token[ofld_idx];
+		break;
+	case PKT_TYPE_MDNS_PASSTHRU_LIST:
+		token = &wow_info->mdns_passthru_list_token[ofld_idx];
+		break;
+#endif
 	default:
 		PHL_TRACE(COMP_PHL_WOW, _PHL_ERR_, "[wow] %s : unknown pkt_type %d.\n"
 			, __func__, pkt_type);
@@ -1619,10 +1739,10 @@ enum rtw_phl_status _phl_wow_cfg_pkt_ofld(struct phl_wow_info *wow_info, u8 pkt_
 	}
 
 #ifdef CONFIG_PHL_PKTOFLD
-	pstatus = rtw_phl_pkt_ofld_request(wow_info->phl_info, macid, pkt_type, token, buf, __func__);
+	pstatus = rtw_phl_pkt_ofld_request(wow_info->phl_info, macid, pkt_type, token, buf, __func__, ofld_idx);
 
 	if (pstatus == RTW_PHL_STATUS_SUCCESS)
-		*pkt_id = phl_pkt_ofld_get_id(wow_info->phl_info, macid, pkt_type);
+		*pkt_id = phl_pkt_ofld_get_id(wow_info->phl_info, macid, pkt_type, ofld_idx);
 
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] %s : pkt_type %s, pkt_id %d, token %u, status(%u)\n",
 		__func__, phl_get_pkt_ofld_str(pkt_type), *pkt_id, *token, pstatus);
@@ -1670,6 +1790,326 @@ static enum rtw_phl_status _phl_wow_cfg_nlo(struct phl_wow_info *wow_info)
 	return pstatus;
 }
 
+#ifdef CONFIG_PHL_APF
+static inline void _cfg_apf_rsp_hdr(struct phl_info_t *phl_info, struct phl_apf_info *info)
+{
+	void *d = phl_to_drvpriv(phl_info);
+	struct dev_cap_t *dev_cap = &phl_info->phl_com->dev_cap;
+	u8 pairwise_algo = info->pairwise_sec_algo;
+
+	info->sec_hdr_len = 0;
+	info->protect_bit = (pairwise_algo == RTW_ENC_NONE) ? false : true;
+
+	if (info->protect_bit) {
+		info->sec_hdr_len = (_phl_chk_hw_form_sechdr(dev_cap, pairwise_algo)) ? 0 : _phl_query_iv_len(pairwise_algo);
+	}
+}
+
+static inline enum rtw_phl_status _ofld_add_apf_ram(void *phl)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t*)phl;
+	struct phl_wow_info *wow_info = phl_to_wow_info(phl_info);
+	struct phl_apf_info *info = wow_info->apf_info;
+	u16 macid = info->macid;
+	int ram_frag_num = 0;
+	u8 ofld_idx = 0;
+	enum rtw_phl_status pstatus = RTW_PHL_STATUS_SUCCESS;
+
+	if (info->is_ram_ofld) {
+		ram_frag_num = APF_RAM_FRAG_NUM(MAX_APF_RAM_SIZE, APF_RAM_FRAG_SIZE);
+	} else {
+		ram_frag_num = APF_RAM_FRAG_NUM(info->ram.prog_len, APF_RAM_FRAG_SIZE);
+	}
+	if (info->mac_chg) {
+		_cfg_apf_rsp_hdr(phl_info, info);
+		pstatus = rtw_phl_pkt_ofld_request(phl_info, macid, PKT_TYPE_APF_RSP_HDR,
+						   &info->apf_ram_token[0], info, __func__, ofld_idx);
+		if (pstatus == RTW_PHL_STATUS_SUCCESS)
+			info->apf_ram_frag_pktid[0] = phl_pkt_ofld_get_id(phl_info, macid, PKT_TYPE_APF_RSP_HDR, ofld_idx);
+#ifdef CONFIG_PHL_APF_DBG
+		PHL_TRACE(COMP_PHL_PKTOFLD, _PHL_INFO_, "[APF] %s : pkt_type %s, pkt_id %d, token %u, status(%u)\n",
+			  __func__, phl_get_pkt_ofld_str(PKT_TYPE_APF_RSP_HDR), info->apf_ram_frag_pktid[0], info->apf_ram_token[0], pstatus);
+#endif
+	}
+
+	/* apf_ram_frag_pktid[1:4] */
+	for (ofld_idx = 1; ofld_idx <= ram_frag_num; ofld_idx++) {
+		info->ofld_idx = ofld_idx;
+		pstatus = rtw_phl_pkt_ofld_request(phl_info, macid, PKT_TYPE_APF_RAM,
+						  &info->apf_ram_token[ofld_idx], info, __func__, ofld_idx);
+		if (pstatus == RTW_PHL_STATUS_SUCCESS)
+			info->apf_ram_frag_pktid[ofld_idx] = phl_pkt_ofld_get_id(phl_info, macid, PKT_TYPE_APF_RAM, ofld_idx);
+#ifdef CONFIG_PHL_APF_DBG
+		PHL_TRACE(COMP_PHL_PKTOFLD, _PHL_INFO_, "[APF] %s : pkt_type %s, pkt_id %d, token %u, status(%u)\n",
+			__func__, phl_get_pkt_ofld_str(PKT_TYPE_APF_RAM), info->apf_ram_frag_pktid[ofld_idx], info->apf_ram_token[ofld_idx], pstatus);
+#endif
+	}
+
+	info->is_ram_ofld = 0;
+	info->ram_frag_num = ram_frag_num;
+
+	return pstatus;
+
+}
+
+static inline enum rtw_phl_status _ofld_del_apf_ram(void *phl)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t*)phl;
+	struct phl_wow_info *wow_info = phl_to_wow_info(phl_info);
+	struct phl_apf_info *info = wow_info->apf_info;
+	u16 macid = info->macid;
+	int ram_frag_num = 0;
+	u8 ofld_idx = 0;
+	enum rtw_phl_status pstatus = RTW_PHL_STATUS_SUCCESS;
+
+	ram_frag_num = info->ram_frag_num;
+
+	if (info->mac_chg) {
+		if (info->apf_ram_frag_pktid[0] != NOT_USED) {
+			rtw_phl_pkt_ofld_cancel(phl_info, macid, PKT_TYPE_APF_RSP_HDR, &info->apf_ram_token[0], 0);
+			info->apf_ram_frag_pktid[0] = NOT_USED;
+		} else {
+#ifdef CONFIG_PHL_APF_DBG
+			PHL_INFO("%s() Unexpected mac_chg id(%u) token(%u)\n",
+				 __func__, info->apf_ram_frag_pktid[0], info->apf_ram_token[0]);
+#endif
+		}
+	}
+
+	/* apf_ram_frag_pktid[1:4] */
+	for (ofld_idx = 1; ofld_idx <= ram_frag_num; ofld_idx++) {
+		info->ofld_idx = ofld_idx;
+		if (info->apf_ram_frag_pktid[ofld_idx] != NOT_USED) {
+			rtw_phl_pkt_ofld_cancel(phl_info, macid, PKT_TYPE_APF_RAM,
+						&info->apf_ram_token[ofld_idx], ofld_idx);
+			info->apf_ram_frag_pktid[ofld_idx] = NOT_USED;
+		} else {
+#ifdef CONFIG_PHL_APF_DBG
+			PHL_INFO("%s() Unexpected prog_chg id(%u) token(%u)\n",
+			 __func__, info->apf_ram_frag_pktid[ofld_idx], info->apf_ram_token[ofld_idx]);
+#endif
+		}
+	}
+
+	info->ram_frag_num = 0;
+	return pstatus;
+}
+
+enum rtw_phl_status rtw_phl_init_apf(void *phl, struct phl_apf_info *apf_info)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t*)phl;
+	struct phl_wow_info *wow_info = phl_to_wow_info(phl_info);
+	enum rtw_phl_status pstatus = RTW_PHL_STATUS_SUCCESS;
+
+	wow_info->apf_info = apf_info;
+	rtw_hal_init_apf(phl_info->hal, apf_info);
+
+	return pstatus;
+}
+
+enum rtw_phl_status rtw_phl_manipulate_apf(void *phl, u8 *param)
+{
+
+	struct phl_info_t *phl_info = (struct phl_info_t*)phl;
+	void *drv_priv = phl_to_drvpriv(phl_info);
+	struct phl_wow_info *wow_info = phl_to_wow_info(phl_info);
+	struct phl_apf_info *info = wow_info->apf_info;
+	struct phl_apf_cmd_blob *cmd_blob = (struct phl_apf_cmd_blob *)param;
+	enum phl_apf_state apf_state = info->apf_state;
+	u32 start_time = _os_get_cur_time_ms();
+	u8 retry_cnt = 5, i = 0;
+	enum rtw_phl_status pstatus = RTW_PHL_STATUS_SUCCESS;
+	enum rtw_hal_status hstatus = RTW_HAL_STATUS_SUCCESS;
+#ifdef CONFIG_PHL_APF_DBG
+	PHL_INFO("[APFDBG] %s()\n", __func__);
+	PHL_INFO("     ==== PHL ====\n");
+	PHL_INFO("apf_cmd_blob(%s) state(%s) fw_mode(%s)\n",
+		 _apf_cmd_to_str(cmd_blob->cmd), _apf_state_to_str(info->apf_state), STR_FW_MODE(info->fw_mode));
+	PHL_INFO("prog_len(%u)\n", info->ram.prog_len);
+#ifdef CONFIG_PHL_APF_DBG_DUMP
+	/*debug_dump_buf(info->ram.buf, info->ram.prog_len, "apf ram");*/
+#endif
+#endif /* CONFIG_PHL_APF_DBG */
+
+	if (PHL_APF_UNFINISHED == info->apf_state) {
+		PHL_ERR("%s() Unfinished FW APF process, skip this time apf cmd\n", __func__);
+		pstatus = RTW_PHL_STATUS_PENDING;
+		goto exit;
+	} else if (PHL_APF_STANDBY < info->apf_state) {
+		PHL_ERR("%s() APF state(%u) abnormal, skip this time apf cmd\n", __func__, info->apf_state);
+		pstatus = RTW_PHL_STATUS_PENDING;
+		goto exit;
+	}
+
+	if (info->apf_force_dis == PHL_APF_FORCE_DIS && cmd_blob->cmd == PHL_APF_CMD_ENABLE) {
+		PHL_INFO("%s() FORCE DISABLE APF\n", __func__);
+		cmd_blob->cmd = PHL_APF_CMD_STANDBY;
+	}
+
+	switch(cmd_blob->cmd) {
+	case PHL_APF_CMD_DISABLE:
+		if (IS_STATE(info->apf_state, PHL_APF_ENABLE, PHL_APF_STANDBY)) {
+			info->apf_cmd = cmd_blob->cmd;
+			info->mac_chg = 1;
+			_ofld_del_apf_ram(phl);
+			rtw_hal_ctrl_apf(phl_info->hal, info);
+		} else if (IS_STATE_ERR(info->apf_state, PHL_APF_DISABLE)) {
+			pstatus = RTW_PHL_STATUS_CMD_ERROR;
+			goto exit;
+		} else {
+			goto exit;
+		}
+		break;
+	case PHL_APF_CMD_ENABLE:
+		if (IS_STATE(info->apf_state, PHL_APF_DISABLE, PHL_APF_STANDBY)) {
+			info->apf_cmd = cmd_blob->cmd;
+			rtw_hal_ctrl_apf(phl_info->hal, info);
+		} else {
+			goto exit;
+		}
+		break;
+	case PHL_APF_CMD_REPORT:
+		if (IS_STATE(info->apf_state, PHL_APF_ENABLE, PHL_APF_STANDBY)) {
+			info->apf_cmd = cmd_blob->cmd;
+			for (i = 0; i < retry_cnt; i++) {
+				info->pre_apf_state = info->apf_state;
+				hstatus = rtw_hal_ctrl_apf(phl_info->hal, info);
+				/* delay for c2h report */
+				_os_sleep_ms(NULL, 20);
+				if (hstatus == RTW_HAL_STATUS_SUCCESS)
+					break;
+				PHL_INFO("%s() PHL_APF_CMD_REPORT fail, retry\n", __func__);
+				info->apf_state = info->pre_apf_state;
+			}
+			if (i > 0)
+				PHL_INFO("%s() PHL_APF_CMD_REPORT polling %u times\n", __func__, i);
+		} else if (IS_STATE_ERR(info->apf_state, PHL_APF_DISABLE)) {
+			pstatus = RTW_PHL_STATUS_CMD_ERROR;
+			goto exit;
+		} else {
+			goto exit;
+		}
+		break;
+	case PHL_APF_CMD_STANDBY:
+		if (IS_STATE(info->apf_state, PHL_APF_ENABLE, PHL_APF_STANDBY, PHL_APF_DISABLE)) {
+			info->apf_cmd = cmd_blob->cmd;
+			rtw_hal_ctrl_apf(phl_info->hal, info);
+		} else {
+			goto exit;
+		}
+		break;
+	case PHL_APF_CMD_CLEAR:
+		if (IS_STATE(info->apf_state, PHL_APF_ENABLE, PHL_APF_STANDBY)) {
+			info->apf_cmd = cmd_blob->cmd;
+			_ofld_del_apf_ram(phl);
+			rtw_hal_ctrl_apf(phl_info->hal, info);
+			info->ram.prog_len = 0;
+			_os_mem_set(phl, info->ram.buf, 0, MAX_APF_RAM_SIZE);
+		} else if (IS_STATE_ERR(info->apf_state, PHL_APF_DISABLE)) {
+			pstatus = RTW_PHL_STATUS_CMD_ERROR;
+			goto exit;
+		} else {
+			goto exit;
+		}
+		break;
+	case PHL_APF_CMD_CHANGE:
+		if (IS_STATE(info->apf_state, PHL_APF_ENABLE, PHL_APF_STANDBY)) {
+			info->apf_cmd = cmd_blob->cmd;
+			_ofld_del_apf_ram(phl);
+			_ofld_add_apf_ram(phl);
+			rtw_hal_ctrl_apf(phl_info->hal, info);
+		} else if (IS_STATE_ERR(info->apf_state, PHL_APF_DISABLE)) {
+			pstatus = RTW_PHL_STATUS_CMD_ERROR;
+			goto exit;
+		} else {
+			goto exit;
+		}
+		break;
+	case PHL_APF_CMD_CHG_FW:
+		/* Before fw change, APF must be disable and sync apf ram to new fw */
+		if (IS_STATE(info->apf_state, PHL_APF_DISABLE)) {
+			info->fw_mode = cmd_blob->fw_mode;
+			/* init fw APF and make it into standby */
+			info->apf_cmd = PHL_APF_CMD_STANDBY;
+			rtw_hal_ctrl_apf(phl_info->hal, info);
+			if (info->ram.prog_len != 0) {
+				info->mac_chg = 1;
+				info->is_ram_ofld = 1;
+				_ofld_add_apf_ram(phl);
+				info->apf_cmd = PHL_APF_CMD_CHANGE;
+				rtw_hal_ctrl_apf(phl_info->hal, info);
+				if (info->fw_mode == RTW_FW_WOWLAN) {
+					if (info->apf_force_dis == PHL_APF_FORCE_IGNORE) {
+						info->apf_cmd = PHL_APF_CMD_ENABLE;
+						rtw_hal_ctrl_apf(phl_info->hal, info);
+					} else {
+						PHL_INFO("%s() FORCE DISABLE APF\n", __func__);
+					}
+				}
+			}
+		} else {
+			pstatus = RTW_PHL_STATUS_CMD_ERROR;
+			goto exit;
+		}
+		break;
+	default:
+		PHL_ERR("%s() Unknown apd cmd(%u)\n", __func__, info->apf_cmd);
+		pstatus = RTW_PHL_STATUS_CMD_ERROR;
+		goto exit;
+		break;
+}
+exit:
+#ifdef CONFIG_PHL_APF_DBG
+	PHL_INFO("%s() used %u ms\n", __func__, phl_get_passing_time_ms(start_time));
+#endif
+	if (pstatus != RTW_PHL_STATUS_SUCCESS) {
+		PHL_ERR("%s() pstatus(%u)\n", __func__, pstatus);
+		PHL_INFO("[APFDBG] cmd(%u) state(%u) fw_mode(%s)\n",
+			 info->apf_cmd, info->apf_state, STR_FW_MODE(info->fw_mode));
+		PHL_INFO("[APFDBG] ram.prog_len(%u)\n", info->ram.prog_len);
+	}
+	info->apf_cmd = PHL_APF_CMD_NONE;
+	if (cmd_blob)
+		_os_kmem_free(drv_priv, cmd_blob, sizeof(struct phl_apf_cmd_blob));
+	return pstatus;
+}
+
+enum rtw_phl_status rtw_phl_manipulate_apf_cmd(void *phl, struct phl_apf_cmd_blob *cmd_blob, u8 cmd_type)
+{
+	enum rtw_phl_status pstatus = RTW_PHL_STATUS_SUCCESS;
+	struct phl_info_t *phl_info = (struct phl_info_t*)phl;
+	struct phl_wow_info *wow_info = phl_to_wow_info(phl_info);
+	struct phl_apf_info *info = wow_info->apf_info;
+	u32 cmd_blob_len = sizeof(struct phl_apf_cmd_blob);
+	u32 start_time = _os_get_cur_time_ms();
+	u32 timeout = 5000;
+
+	if (cmd_type == PHL_CMD_DIRECTLY) {
+		rtw_phl_manipulate_apf(phl, (u8*)cmd_blob);
+		goto exit;
+	}
+
+	pstatus = phl_cmd_enqueue(phl_info,
+				  HW_BAND_0,
+				  MSG_EVT_APF_CTRL,
+				  (u8*)cmd_blob, cmd_blob_len,
+				  NULL,
+				  cmd_type, timeout);
+
+	if (pstatus != RTW_PHL_STATUS_SUCCESS) {
+		PHL_TRACE(COMP_PHL_DBG, _PHL_ERR_, "%s() cmd enqueue fail\n", __func__);
+	}
+
+exit:
+#ifdef CONFIG_PHL_APF_DBG
+	PHL_INFO("[APFDBG] %s() used %u ms\n", __func__, phl_get_passing_time_ms(start_time));
+#endif
+	return pstatus;
+}
+
+#endif /* CONFIG_PHL_APF */
+
+
 enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 {
 	enum rtw_phl_status pstatus = RTW_PHL_STATUS_FAILURE;
@@ -1686,6 +2126,20 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 	struct rtw_pkt_ofld_realwow_wp_info wakeup_info = {0};
 	struct rtw_pkt_ofld_probe_req_info probe_req_info = {0};
 	struct rtw_hal_wow_cfg cfg;
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+	struct rtw_mdns_ofld_info *mdns_ofld_info = wow_info->mdns_ofld_info;
+	struct rtw_mdns_ipv4_header *mdns_ipv4_header = &mdns_ofld_info->mdns_ipv4_header;
+	struct rtw_mdns_ipv6_header *mdns_ipv6_header = &mdns_ofld_info->mdns_ipv6_header;
+	struct rtw_mdns_resp_entry *resp_entry = mdns_ofld_info->resp_entry;
+	struct rtw_mdns_passthru_name *passthru_name = mdns_ofld_info->passthru_list.passthru_name;
+	u8 resp_offset = 0;
+#endif
+#ifdef CONFIG_PHL_APF
+	struct phl_apf_info *apf_info = wow_info->apf_info;
+	void *drv_priv = phl_to_drvpriv(phl_info);
+	struct phl_apf_cmd_blob *cmd_blob = NULL;
+#endif
+	u8 ofld_idx;
 
 	FUNCIN();
 
@@ -1701,7 +2155,7 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 			pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
 					PKT_TYPE_ARP_RSP,
 					&wow_info->arp_ofld_info.arp_rsp_id,
-					(void *)&arp_rsp_info);
+					(void *)&arp_rsp_info, 0);
 
 			if (pstatus != RTW_PHL_STATUS_SUCCESS)
 				break;
@@ -1716,7 +2170,7 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 				pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
 						PKT_TYPE_NULL_DATA,
 						&wow_info->keep_alive_info.keep_alive_pkt_id,
-						(void *)&null_info);
+						(void *)&null_info, 0);
 
 				if (pstatus != RTW_PHL_STATUS_SUCCESS)
 					break;
@@ -1734,7 +2188,7 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 
 			pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
 					PKT_TYPE_NDP, &wow_info->ndp_ofld_info.ndp_id,
-					(void *)&na_info);
+					(void *)&na_info, 0);
 
 			if (pstatus != RTW_PHL_STATUS_SUCCESS)
 				break;
@@ -1745,7 +2199,7 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 
 			pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
 					PKT_TYPE_EAPOL_KEY, &wow_info->gtk_ofld_info.gtk_rsp_id,
-					(void *)&eapol_key_info);
+					(void *)&eapol_key_info, 0);
 
 			if (pstatus != RTW_PHL_STATUS_SUCCESS)
 				break;
@@ -1755,7 +2209,7 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 
 				pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
 					PKT_TYPE_SA_QUERY, &wow_info->gtk_ofld_info.sa_query_id,
-					(void *)&sa_query_info);
+					(void *)&sa_query_info, 0);
 
 				if (pstatus != RTW_PHL_STATUS_SUCCESS)
 					break;
@@ -1770,7 +2224,7 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 			pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
 					PKT_TYPE_REALWOW_KAPKT,
 					&wow_info->realwow_info.keepalive_id,
-					(void *)&kapkt_info);
+					(void *)&kapkt_info, 0);
 
 			if (pstatus != RTW_PHL_STATUS_SUCCESS)
 				break;
@@ -1781,7 +2235,7 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 			pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
 					PKT_TYPE_REALWOW_ACK,
 					&wow_info->realwow_info.ack_pattern_id,
-					(void *)&ack_info);
+					(void *)&ack_info, 0);
 
 			if (pstatus != RTW_PHL_STATUS_SUCCESS)
 				break;
@@ -1792,7 +2246,7 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 			pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
 					PKT_TYPE_REALWOW_WP,
 					&wow_info->realwow_info.wakeup_pattern_id,
-					(void *)&wakeup_info);
+					(void *)&wakeup_info, 0);
 
 			if (pstatus != RTW_PHL_STATUS_SUCCESS)
 				break;
@@ -1805,7 +2259,7 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 			pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
 			                                PKT_TYPE_PROBE_REQ,
 			                                &wow_info->nlo_info.probe_req_id,
-			                                (void *)&probe_req_info);
+			                                (void *)&probe_req_info, 0);
 			if (pstatus != RTW_PHL_STATUS_SUCCESS)
 				break;
 
@@ -1813,6 +2267,82 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 			if (pstatus != RTW_PHL_STATUS_SUCCESS)
 				break;
 		}
+
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+		if (wow_info->mdns_ofld_info->mdns_en) {
+			/* mdns data response */
+			for (ofld_idx = 0; ofld_idx < MAX_MDNS_RESP_NUM; ofld_idx++) {
+				set_wow_init_pkt_ofld_id(&resp_entry[ofld_idx].data_pktid);
+				if (resp_entry[ofld_idx].content_len) {
+					resp_offset = resp_offset | BIT(ofld_idx);
+					pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
+					          PKT_TYPE_MDNS_RSP_DATA,
+					          &resp_entry[ofld_idx].data_pktid,
+					          (void *)&resp_entry[ofld_idx],
+					          ofld_idx);
+					if (pstatus != RTW_PHL_STATUS_SUCCESS)
+						goto exit;
+				}
+			}
+
+			/* ipv4 header */
+			set_wow_init_pkt_ofld_id(&mdns_ipv4_header->ipv4_pktid);
+			if (!is_all_null(mdns_ipv4_header->src_ipv4_addr, RTW_IP_ADDR_LEN)
+			                 && resp_offset) {
+				_phl_cfg_pkt_ofld_mdns_rsp_ipv4_info(wow_info, sta, mdns_ipv4_header);
+
+				pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
+				          PKT_TYPE_MDNS_RSP_IPV4,
+				          &mdns_ipv4_header->ipv4_pktid,
+				          (void *)mdns_ipv4_header, 0);
+
+				if (pstatus != RTW_PHL_STATUS_SUCCESS)
+					break;
+			}
+
+			/* ipv6 header */
+			set_wow_init_pkt_ofld_id(&mdns_ipv6_header->ipv6_pktid);
+			if (!is_all_null(mdns_ipv6_header->src_ipv6_addr, RTW_IPv6_ADDR_LEN)
+			                 && resp_offset) {
+				_phl_cfg_pkt_ofld_mdns_rsp_ipv6_info(wow_info, sta, mdns_ipv6_header);
+
+				pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
+				          PKT_TYPE_MDNS_RSP_IPV6,
+				          &mdns_ipv6_header->ipv6_pktid,
+				          (void *)mdns_ipv6_header, 0);
+
+				if (pstatus != RTW_PHL_STATUS_SUCCESS)
+					break;
+			}
+
+
+			/* mdns passthru list */
+			for (ofld_idx = 0; ofld_idx < MAX_MDNS_PASSTHRU_NAME_NUM; ofld_idx++) {
+				set_wow_init_pkt_ofld_id(&passthru_name[ofld_idx].pass_pktid);
+				if (passthru_name[ofld_idx].name_len) {
+					pstatus = _phl_wow_cfg_pkt_ofld(wow_info,
+					          PKT_TYPE_MDNS_PASSTHRU_LIST,
+					          &passthru_name[ofld_idx].pass_pktid,
+					          (void *)&passthru_name[ofld_idx],
+					          ofld_idx);
+					if (pstatus != RTW_PHL_STATUS_SUCCESS)
+						goto exit;
+				}
+			}
+		}
+#endif /* CONFIG_PHL_MDNS_OFFLOAD */
+#ifdef CONFIG_PHL_APF
+		PHL_INFO("%s() Activate WOWLANFW APF\n", __func__);
+		cmd_blob = _os_kmem_alloc(drv_priv, sizeof(struct phl_apf_cmd_blob));
+		if (cmd_blob) {
+			cmd_blob->fw_mode = RTW_FW_WOWLAN;
+			cmd_blob->cmd = PHL_APF_CMD_CHG_FW;
+			rtw_phl_manipulate_apf((void*)phl_info, (u8*)cmd_blob);
+		} else {
+			PHL_ERR("%s() allocate memory for apf_cmd_blob fail\n", __func__);
+		}
+#endif /* CONFIG_PHL_APF */
+
 
 		cfg.keep_alive_cfg = &wow_info->keep_alive_info;
 		cfg.disc_det_cfg = &wow_info->disc_det_info;
@@ -1825,6 +2355,9 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 		cfg.pattern_match_info = &wow_info->pattern_match_info;
 		cfg.wow_gpio = &wow_info->wow_gpio;
 		cfg.periodic_wake_cfg = &wow_info->periodic_wake_info;
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+		cfg.mdns_ofld_info = wow_info->mdns_ofld_info;
+#endif
 
 		hstatus = rtw_hal_wow_func_en(phl_info->phl_com, phl_info->hal, sta->macid, &cfg);
 		if (hstatus != RTW_HAL_STATUS_SUCCESS) {
@@ -1851,6 +2384,7 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 
 	} while (0);
 
+exit:
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] %s status (%u).\n", __func__, pstatus);
 
 	return pstatus;
@@ -1863,6 +2397,15 @@ enum rtw_phl_status phl_wow_func_dis(struct phl_wow_info *wow_info)
 	struct phl_info_t *phl_info = wow_info->phl_info;
 	struct rtw_phl_stainfo_t *sta = wow_info->sta;
 	struct rtw_hal_wow_cfg cfg;
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+	struct rtw_mdns_ofld_info *mdns_ofld_info = wow_info->mdns_ofld_info;
+	struct rtw_mdns_ipv4_header *mdns_ipv4_header = &mdns_ofld_info->mdns_ipv4_header;
+	struct rtw_mdns_ipv6_header *mdns_ipv6_header = &mdns_ofld_info->mdns_ipv6_header;
+	struct rtw_mdns_resp_entry *resp_entry = mdns_ofld_info->resp_entry;
+	struct rtw_mdns_passthru_name *passthru_name = mdns_ofld_info->passthru_list.passthru_name;
+	u8 resp_offset = 0;
+#endif
+	u8 ofld_idx;
 
 	if (!wow_info->wow_wake_info.wow_en) {
 		PHL_WARN("%s : wow func is not enabled!\n", __func__);
@@ -1880,6 +2423,9 @@ enum rtw_phl_status phl_wow_func_dis(struct phl_wow_info *wow_info)
 	cfg.pattern_match_info = &wow_info->pattern_match_info;
 	cfg.wow_gpio = &wow_info->wow_gpio;
 	cfg.periodic_wake_cfg = &wow_info->periodic_wake_info;
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+	cfg.mdns_ofld_info = wow_info->mdns_ofld_info;
+#endif
 
 	hstatus = rtw_hal_wow_func_dis(phl_info->phl_com, phl_info->hal, sta->macid,
 	                               &cfg);
@@ -1889,7 +2435,7 @@ enum rtw_phl_status phl_wow_func_dis(struct phl_wow_info *wow_info)
 	if (wow_info->arp_ofld_info.arp_en) {
 #ifdef CONFIG_PHL_PKTOFLD
 		rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
-		                        PKT_TYPE_ARP_RSP, &wow_info->arp_pkt_token);
+		                        PKT_TYPE_ARP_RSP, &wow_info->arp_pkt_token, 0);
 #endif
 	}
 
@@ -1897,14 +2443,14 @@ enum rtw_phl_status phl_wow_func_dis(struct phl_wow_info *wow_info)
 	    wow_info->keep_alive_info.keep_alive_pkt_type == PKT_TYPE_NULL_DATA) {
 #ifdef CONFIG_PHL_PKTOFLD
 		rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
-		                        PKT_TYPE_NULL_DATA, &wow_info->null_pkt_token);
-#endif
+		                        PKT_TYPE_NULL_DATA, &wow_info->null_pkt_token, 0);
 	}
+#endif
 
 	if (wow_info->ndp_ofld_info.ndp_en) {
 #ifdef CONFIG_PHL_PKTOFLD
 		rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
-		                        PKT_TYPE_NDP, &wow_info->ndp_pkt_token);
+		                        PKT_TYPE_NDP, &wow_info->ndp_pkt_token, 0);
 #endif
 	}
 
@@ -1912,13 +2458,13 @@ enum rtw_phl_status phl_wow_func_dis(struct phl_wow_info *wow_info)
 #ifdef CONFIG_PHL_PKTOFLD
 		rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
 		                        PKT_TYPE_EAPOL_KEY,
-		                        &wow_info->eapol_key_pkt_token);
+		                        &wow_info->eapol_key_pkt_token, 0);
 #endif
 		if (wow_info->gtk_ofld_info.ieee80211w_en) {
 #ifdef CONFIG_PHL_PKTOFLD
 			rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
 			                        PKT_TYPE_SA_QUERY,
-			                        &wow_info->sa_query_pkt_token);
+			                        &wow_info->sa_query_pkt_token, 0);
 #endif
 		}
 	}
@@ -1926,11 +2472,11 @@ enum rtw_phl_status phl_wow_func_dis(struct phl_wow_info *wow_info)
 	if (wow_info->realwow_info.realwow_en) {
 #ifdef CONFIG_PHL_PKTOFLD
 		rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
-					PKT_TYPE_REALWOW_KAPKT, &wow_info->kapkt_pkt_token);
+					PKT_TYPE_REALWOW_KAPKT, &wow_info->kapkt_pkt_token, 0);
 		rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
-					PKT_TYPE_REALWOW_ACK, &wow_info->ack_pkt_token);
+					PKT_TYPE_REALWOW_ACK, &wow_info->ack_pkt_token, 0);
 		rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
-					PKT_TYPE_REALWOW_WP, &wow_info->wp_token);
+					PKT_TYPE_REALWOW_WP, &wow_info->wp_token, 0);
 #endif
 	}
 
@@ -1938,13 +2484,46 @@ enum rtw_phl_status phl_wow_func_dis(struct phl_wow_info *wow_info)
 #ifdef CONFIG_PHL_PKTOFLD
 		pstatus = rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
 		                              PKT_TYPE_PROBE_REQ,
-		                              &wow_info->probe_req_pkt_token);
+		                              &wow_info->probe_req_pkt_token, 0);
 #endif
 		hstatus = rtw_hal_wow_cfg_nlo(phl_info->hal, SCAN_OFLD_OP_STOP,
 		                              sta->macid, sta->rlink->hw_band,
 		                              sta->rlink->hw_port,
 		                              &wow_info->nlo_info);
 	}
+
+#ifdef CONFIG_PHL_MDNS_OFFLOAD
+	if (mdns_ofld_info->mdns_en) {
+		/* mdns data response */
+		for (ofld_idx = 0; ofld_idx < MAX_MDNS_RESP_NUM; ofld_idx++) {
+			if (resp_entry[ofld_idx].content_len) {
+				resp_offset = resp_offset | BIT(ofld_idx);
+				rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
+							PKT_TYPE_MDNS_RSP_DATA,
+							&wow_info->mdns_rsp_data_token[ofld_idx],
+							ofld_idx);
+			}
+		}
+		/* ipv4 header */
+		if (!is_all_null(mdns_ipv4_header->src_ipv4_addr, RTW_IP_ADDR_LEN)
+		                 && resp_offset)
+			rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
+			            PKT_TYPE_MDNS_RSP_IPV4, &wow_info->mdns_rsp_ipv4_token, 0);
+		/* ipv6 header */
+		if (!is_all_null(mdns_ipv6_header->src_ipv6_addr, RTW_IPv6_ADDR_LEN)
+		                 && resp_offset)
+			rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
+			            PKT_TYPE_MDNS_RSP_IPV6, &wow_info->mdns_rsp_ipv6_token, 0);
+		/* mdns passthru list */
+		for (ofld_idx = 0; ofld_idx < MAX_MDNS_PASSTHRU_NAME_NUM; ofld_idx++) {
+			if (passthru_name[ofld_idx].name_len)
+				rtw_phl_pkt_ofld_cancel(phl_info, sta->macid,
+							PKT_TYPE_MDNS_PASSTHRU_LIST,
+							&wow_info->mdns_passthru_list_token[ofld_idx],
+							ofld_idx);
+		}
+	}
+#endif
 
 
 	hstatus = rtw_hal_wow_func_stop(phl_info->phl_com, phl_info->hal, sta->macid);

@@ -160,7 +160,7 @@
  * refs/heads/common-android13-5.15-2023-04 (5.15.94)
  * refs/heads/android13-5.15-lts (5.15.106)
  */
-#if (defined(CONFIG_RTW_ANDROID) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 94)))
+#if (defined(__ANDROID_COMMON_KERNEL__) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 94)))
         #define CONFIG_ACK_5_15_LTS_KERNEL
 #endif
 
@@ -646,16 +646,6 @@ static inline int rtw_sptime_cmp(const sysptime cmp1, const sysptime cmp2)
 #endif
 }
 
-static inline bool rtw_sptime_eql(const sysptime cmp1, const sysptime cmp2)
-{
-	return rtw_sptime_cmp(cmp1, cmp2) == 0;
-}
-
-static inline bool rtw_sptime_is_zero(const sysptime sptime)
-{
-	return rtw_sptime_cmp(sptime, rtw_sptime_zero()) == 0;
-}
-
 /*
  * sub = lhs - rhs, in normalized form
  */
@@ -712,63 +702,6 @@ static inline s64 rtw_sptime_to_ns(const sysptime sptime)
 static inline sysptime rtw_ns_to_sptime(u64 ns)
 {
 	return ns_to_ktime(ns);
-}
-
-static inline s64 rtw_sptime_diff_ms(const sysptime start, const sysptime end)
-{
-	sysptime diff;
-
-	diff = rtw_sptime_sub(end, start);
-
-	return rtw_sptime_to_ms(diff);
-}
-
-static inline s64 rtw_sptime_pass_ms(const sysptime start)
-{
-	sysptime cur, diff;
-
-	cur = rtw_sptime_get();
-	diff = rtw_sptime_sub(cur, start);
-
-	return rtw_sptime_to_ms(diff);
-}
-
-static inline s64 rtw_sptime_diff_us(const sysptime start, const sysptime end)
-{
-	sysptime diff;
-
-	diff = rtw_sptime_sub(end, start);
-
-	return rtw_sptime_to_us(diff);
-}
-
-static inline s64 rtw_sptime_pass_us(const sysptime start)
-{
-	sysptime cur, diff;
-
-	cur = rtw_sptime_get();
-	diff = rtw_sptime_sub(cur, start);
-
-	return rtw_sptime_to_us(diff);
-}
-
-static inline s64 rtw_sptime_diff_ns(const sysptime start, const sysptime end)
-{
-	sysptime diff;
-
-	diff = rtw_sptime_sub(end, start);
-
-	return rtw_sptime_to_ns(diff);
-}
-
-static inline s64 rtw_sptime_pass_ns(const sysptime start)
-{
-	sysptime cur, diff;
-
-	cur = rtw_sptime_get();
-	diff = rtw_sptime_sub(cur, start);
-
-	return rtw_sptime_to_ns(diff);
 }
 
 /*tasklet*/
@@ -1333,8 +1266,10 @@ static inline void rtw_dump_stack(void)
 #define rtw_warn_on(condition) \
 	do { \
 		if (condition) { \
+			RTW_WARN("RTW_WARN_ON triggered: =====> START\n"); \
 			WARN_ON(1); \
-			ATOMIC_INC((ATOMIC_T *)&rtw_warn_on_cnt); \
+			ATOMIC_INC(&rtw_warn_on_cnt); \
+			RTW_WARN("RTW_WARN_ON triggered: <===== END\n"); \
 		} \
 	} while (0)
 

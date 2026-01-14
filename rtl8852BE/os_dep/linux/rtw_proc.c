@@ -28,7 +28,9 @@ inline struct proc_dir_entry *get_rtw_drv_proc(void)
 	return rtw_proc;
 }
 
+#ifndef RTW_PROC_NAME
 #define RTW_PROC_NAME DRV_NAME
+#endif /* RTW_PROC_NAME */
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 9, 0))
 #define file_inode(file) ((file)->f_dentry->d_inode)
@@ -1301,8 +1303,16 @@ static int proc_get_false_alarm_accumulated(struct seq_file *m, void *v)
 	struct dvobj_priv *dvobj = adapter_to_dvobj(padapter);
 	/* ToDo CONFIG_RTW_MLD: [currently primary link only] */
 	struct _ADAPTER_LINK *alink = GET_PRIMARY_LINK(padapter);
-	struct rtw_wifi_role_link_t *wrlink = alink->wrlink;
-	enum phl_band_idx hw_band = wrlink->hw_band;
+	struct rtw_wifi_role_link_t *wrlink;
+	enum phl_band_idx hw_band = HW_BAND_0;
+
+	if (!alink)
+		return -EFAULT;
+	wrlink = alink->wrlink;
+
+	if (!wrlink)
+		return -EFAULT;
+	hw_band = wrlink->hw_band;
 
 	_RTW_PRINT_SEL(m , "Accumulated False Alarm:%u\n",
 		       ATOMIC_READ((ATOMIC_T *)&dvobj->fa_cnt_acc[hw_band]));
@@ -1320,8 +1330,8 @@ static ssize_t proc_set_false_alarm_accumulated(struct file *file,
 	struct dvobj_priv *dvobj = adapter_to_dvobj(padapter);
 	/* ToDo CONFIG_RTW_MLD: [currently primary link only] */
 	struct _ADAPTER_LINK *alink = GET_PRIMARY_LINK(padapter);
-	struct rtw_wifi_role_link_t *wrlink = alink->wrlink;
-	enum phl_band_idx hw_band = wrlink->hw_band;
+	struct rtw_wifi_role_link_t *wrlink;
+	enum phl_band_idx hw_band = HW_BAND_0;
 	char tmp[32];
 	u32 false_clr;
 
@@ -1332,6 +1342,14 @@ static ssize_t proc_set_false_alarm_accumulated(struct file *file,
 		rtw_warn_on(1);
 		return -EFAULT;
 	}
+
+	if (!alink)
+		return -EFAULT;
+	wrlink = alink->wrlink;
+
+	if (!wrlink)
+		return -EFAULT;
+	hw_band = wrlink->hw_band;
 
 	if (buffer && !copy_from_user(tmp, buffer, count)) {
 		u32 num = sscanf(tmp, "%u ", &false_clr);
@@ -1557,8 +1575,9 @@ static int proc_get_linked_info_dump(struct seq_file *m, void *v)
 {
 	struct net_device *dev = m->private;
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+
 	if (padapter)
-		RTW_PRINT_SEL(m, "rtw_hal_linked_info_dump :%s\n", (padapter->bLinkInfoDump) ? "enable" : "disable");
+		RTW_PRINT_SEL(m, "linked_info_dump :%s\n", (padapter->bLinkInfoDump) ? "enable" : "disable");
 
 	return 0;
 }
@@ -1598,8 +1617,7 @@ static ssize_t proc_set_linked_info_dump(struct file *file, const char __user *b
 			padapter->bLinkInfoDump = mode;
 
 		else if ((mode == 2) || (mode == 0 && pre_mode == 2)) { /* consider power_saving */
-			/* RTW_INFO("rtw_hal_linked_info_dump =%s\n", (padapter->bLinkInfoDump)?"enable":"disable") */
-			rtw_hal_linked_info_dump(padapter, mode);
+			RTW_INFO("linked_info_dump =%s\n", (padapter->bLinkInfoDump)?"enable":"disable");
 		}
 	}
 	return count;
@@ -1659,6 +1677,42 @@ static int proc_get_sta_tp_info(struct seq_file *m, void *v)
 	return 0;
 }
 
+static int proc_get_rt_cap_ctrl(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+
+
+	RTW_PRINT_SEL(m, "[%d] MBO = %s\n", DIS_MBO,
+		      (padapter->dis_rt_cap & BIT(DIS_MBO))?"DIS":"EN");
+
+	RTW_PRINT_SEL(m, "Disabled runtime CAP = 0x%08x\n", padapter->dis_rt_cap);
+
+	return 0;
+}
+
+static ssize_t proc_set_rt_cap_ctrl(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	char tmp[32] = {0};
+	int num = 0;
+	u32 param = 0;
+
+	if (count < 1)
+		return -EFAULT;
+
+	if (count > sizeof(tmp))
+		return -EFAULT;
+
+	if (buffer && !copy_from_user(tmp, buffer, count)) {
+		num = sscanf(tmp, "%x", &param);
+		padapter->dis_rt_cap = param;
+	}
+
+	return count;
+}
+
 static int proc_get_turboedca_ctrl(struct seq_file *m, void *v)
 {
 	struct net_device *dev = m->private;
@@ -1705,8 +1759,8 @@ static ssize_t proc_set_turboedca_ctrl(struct file *file, const char __user *buf
 			2: disable turboedca and setting EDCA parameter based on the input parameter
 			> 2 : currently reset to 0 */
 
-		if (mode > 2)
-			mode = 0;
+		if (mode >= DIS_TURBO_EDCA_NUM)
+			mode = EN_TURBO;
 
 		padapter->dis_turboedca = mode;
 
@@ -2275,8 +2329,8 @@ static ssize_t proc_set_ch_sel_policy(struct file *file, const char __user *buff
 		goto exit;
 
 	num = sscanf(tmp, "%hhu", &within_sb);
-	if (num >=	1)
-		rfctl->ch_sel_within_same_band = within_sb ? 1 : 0;
+	if (num >= 1 && within_sb < RTW_CHSEL_BAND_NUM)
+		rfctl->ch_sel_within_same_band = within_sb;
 
 exit:
 	return count;
@@ -5444,10 +5498,11 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 #ifdef CONFIG_HUAWEI_PROC
 	RTW_PROC_HDL_SSEQ("huawei_trx_info", proc_get_huawei_trx_info, NULL),
 #endif
-	RTW_PROC_HDL_SSEQ("rtw_hal_linked_info_dump", proc_get_linked_info_dump, proc_set_linked_info_dump),
+	RTW_PROC_HDL_SSEQ("linked_info_dump", proc_get_linked_info_dump, proc_set_linked_info_dump),
 	RTW_PROC_HDL_SSEQ("sta_tp_dump", proc_get_sta_tp_dump, proc_set_sta_tp_dump),
 	RTW_PROC_HDL_SSEQ("sta_tp_info", proc_get_sta_tp_info, NULL),
 	RTW_PROC_HDL_SSEQ("dis_turboedca", proc_get_turboedca_ctrl, proc_set_turboedca_ctrl),
+	RTW_PROC_HDL_SSEQ("dis_rt_cap", proc_get_rt_cap_ctrl, proc_set_rt_cap_ctrl),
 	RTW_PROC_HDL_SSEQ("tx_info_msg", proc_get_tx_info_msg, NULL),
 	RTW_PROC_HDL_SSEQ("rx_info_msg", proc_get_rx_info_msg, proc_set_rx_info_msg),
 	RTW_PROC_HDL_SSEQ("false_alarm_accumulated",
@@ -5504,7 +5559,18 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 #ifdef CONFIG_WOW_PERIODIC_WAKE
 	RTW_PROC_HDL_SSEQ("wow_pw_info", proc_get_wow_pw_info, proc_set_wow_pw_info),
 #endif
+#ifdef CONFIG_MDNS_OFFLOAD
+	RTW_PROC_HDL_SSEQ("wow_mdns_resp", proc_get_wow_mdns_resp, proc_set_wow_mdns_resp),
+	RTW_PROC_HDL_SSEQ("wow_mdns_match_criteria", proc_get_wow_mdns_match_criteria, proc_set_wow_mdns_match_criteria),
+	RTW_PROC_HDL_SSEQ("wow_mdns_passthru_list", proc_get_wow_mdns_passthru_list, proc_set_wow_mdns_passthru_list),
+	RTW_PROC_HDL_SSEQ("wow_mdns_offload_state", proc_get_wow_mdns_offload_state, proc_set_wow_mdns_offload_state),
+	RTW_PROC_HDL_SSEQ("wow_mdns_passthru_behavior", proc_get_wow_mdns_passthru_behavior, proc_set_wow_mdns_passthru_behavior),
 #endif
+#ifdef CONFIG_APF
+	RTW_PROC_HDL_SSEQ("apf", proc_get_apf, proc_set_apf),
+#endif
+#endif /* CONFIG_WOWLAN */
+
 
 #ifdef CONFIG_P2P_WOWLAN
 	RTW_PROC_HDL_SSEQ("p2p_wowlan_info", proc_get_p2p_wowlan_info, NULL),
@@ -5537,6 +5603,9 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	#if CONFIG_DFS_SLAVE_WITH_RADAR_DETECT
 	RTW_PROC_HDL_SSEQ("dfs_slave_with_rd", proc_get_dfs_slave_with_rd, proc_set_dfs_slave_with_rd),
 	#endif
+#endif
+#ifdef CONFIG_BCN_CNT_CONFIRM_HDL
+	RTW_PROC_HDL_SSEQ("new_bcn_max", proc_get_new_bcn_max, proc_set_new_bcn_max),
 #endif
 	RTW_PROC_HDL_SSEQ("sink_udpport", proc_get_udpport, proc_set_udpport),
 #ifdef DBG_RX_COUNTER_DUMP
@@ -6320,7 +6389,7 @@ static int proc_get_self_diag_info(struct seq_file *m, void *v)
 		RTW_PRINT_SEL(m, "get passing time from last get self_diag_info (%d ms)\n\n", rtw_get_passing_time_ms(last_time));
 	last_time =  rtw_get_current_time();
 
-	RTW_PRINT_SEL(m, "driver warn on count = %d \n\n", rtw_warn_on_cnt);
+	RTW_PRINT_SEL(m, "driver warn on count = %u \n\n", ATOMIC_READ(&rtw_warn_on_cnt));
 
 #ifdef CONFIG_USB_HCI
 	RTW_PRINT_SEL(m, "%s%17s, %s\n", "Driver RX:", "Last count", "Current count");
@@ -6439,12 +6508,12 @@ static ssize_t proc_set_self_diag_info(struct file *file, const char __user *buf
 	}
 	else if (strcmp(type, "reset_drv_counter") == 0) {
 		if (val == '1') {
-			rtw_warn_on_cnt = 0;
+			ATOMIC_SET(&rtw_warn_on_cnt, 0);
 #ifdef CONFIG_USB_HCI
 			_rtw_memset(&(dvobj->usb_data.trx_stats), 0, sizeof(struct trx_stats));
 #endif
 		}
-		RTW_INFO("driver_warn_on_cnt : %u\n", rtw_warn_on_cnt);
+		RTW_INFO("driver_warn_on_cnt : %u\n", ATOMIC_READ(&rtw_warn_on_cnt));
 	}
 	return count;
 

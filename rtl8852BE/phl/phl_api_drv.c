@@ -74,7 +74,6 @@ void rtw_phl_proc_cmd(void *phl, char proc_cmd,
 		      char *output, u32 out_len)
 {
 	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
-	struct hal_info_t *hal_info = (struct hal_info_t *)phl_info->hal;
 
 	/* Avoid string comparison mismatch since extra char '\n' was appended to buf */
 	if (incmd->in_type == RTW_ARG_TYPE_BUF
@@ -86,11 +85,11 @@ void rtw_phl_proc_cmd(void *phl, char proc_cmd,
 	}
 
 	if (RTW_PROC_CMD_PHL == proc_cmd)
-		rtw_phl_dbg_proc_cmd(phl_info, incmd, output, out_len);
+		phl_dbg_proc_cmd(phl_info, incmd, output, out_len);
 	else if (RTW_PROC_CMD_CORE == proc_cmd)
-		rtw_phl_dbg_core_cmd(phl_info, incmd, output, out_len);
+		phl_dbg_core_cmd(phl_info, incmd, output, out_len);
 	else
-		rtw_hal_proc_cmd(hal_info, proc_cmd, incmd, output, out_len);
+		phl_dbg_hal_cmd(phl_info, proc_cmd, incmd, output, out_len);
 }
 
 void rtw_phl_get_fw_ver(void *phl, char *ver_str, u16 len)
@@ -264,8 +263,20 @@ void rtw_phl_enable_interrupt_sync(struct rtw_phl_com_t* phl_com)
 	evt_ops->set_interrupt_caps(phl_com->drv_priv, true);
 #else
 	struct phl_info_t *phl_info = (struct phl_info_t *)phl_com->phl_priv;
+	#if defined(CONFIG_PCI_HCI)
+	void *drv = phl_to_drvpriv(phl_info);
+	struct hci_info_t *hci_info = (struct hci_info_t *)phl_info->hci;
+	_os_spinlockfg sp_flags;
+
+	_os_spinlock(drv, &hci_info->int_hdl_lock, _irq, &sp_flags);
+	#endif
 
 	rtw_hal_enable_interrupt(phl_com, phl_info->hal);
+
+	#if defined(CONFIG_PCI_HCI)
+	hci_info->int_disabled = false;
+	_os_spinunlock(drv, &hci_info->int_hdl_lock, _irq, &sp_flags);
+	#endif
 #endif /* CONFIG_SYNC_INTERRUPT */
 }
 
@@ -277,8 +288,19 @@ void rtw_phl_disable_interrupt_sync(struct rtw_phl_com_t* phl_com)
 	evt_ops->set_interrupt_caps(phl_com->drv_priv, false);
 #else
 	struct phl_info_t *phl_info = (struct phl_info_t *)phl_com->phl_priv;
+	#if defined(CONFIG_PCI_HCI)
+	void *drv = phl_to_drvpriv(phl_info);
+	struct hci_info_t *hci_info = (struct hci_info_t *)phl_info->hci;
+	_os_spinlockfg sp_flags;
+
+	_os_spinlock(drv, &hci_info->int_hdl_lock, _irq, &sp_flags);
+	hci_info->int_disabled = true;
+	#endif
 
 	rtw_hal_disable_interrupt(phl_com, phl_info->hal);
+	#if defined(CONFIG_PCI_HCI)
+	_os_spinunlock(drv, &hci_info->int_hdl_lock, _irq, &sp_flags);
+	#endif
 #endif /* CONFIG_SYNC_INTERRUPT */
 }
 

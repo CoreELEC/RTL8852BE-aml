@@ -25,12 +25,15 @@
 #endif
 #define BTM_SCAN_DENY_WAIT 500
 #define BTM_FT_ACTION_TIMEOUT 1000
-#define BTM_SCAN_DWELL_TIME 30
+
+#define BTM_NB_POLL_INTERVAL 10
+#define BTM_NB_POLL_TIMES 20
 /*
 * State machine
 */
 enum BTM_STATE_ST {
 	BTM_ST_START,
+	BTM_ST_NB,
 	BTM_ST_SCAN,
 	BTM_ST_OTD,
 	BTM_ST_ROAM,
@@ -39,10 +42,12 @@ enum BTM_STATE_ST {
 };
 
 enum BTM_EV_ID {
+	BTM_EV_nb_poll,
 	BTM_EV_scan_deny_expire,
 	BTM_EV_scan_timeout,
+	BTM_EV_scan_probe_req,
+	BTM_EV_scan_probe_req_timeout,
 	BTM_EV_scan_found_candidate,
-	BTM_EV_scan_opch_reported,
 	BTM_EV_connect_timeout,
 	BTM_EV_disassoc_timeout,
 	BTM_EV_ft_action_timeout,
@@ -51,6 +56,7 @@ enum BTM_EV_ID {
 };
 
 static int btm_start_st_hdl(void *obj, u16 event, void *param);
+static int btm_nb_req_st_hdl(void *obj, u16 event, void *param);
 static int btm_scan_st_hdl(void *obj, u16 event, void *param);
 static int btm_otd_st_hdl(void *obj, u16 event, void *param);
 static int btm_roam_st_hdl(void *obj, u16 event, void *param);
@@ -59,6 +65,7 @@ static int btm_end_st_hdl(void *obj, u16 event, void *param);
 /* STATE table */
 static struct fsm_state_ent btm_state_tbl[] = {
 	ST_ENT(BTM_ST_START, btm_start_st_hdl),
+	ST_ENT(BTM_ST_NB, btm_nb_req_st_hdl),
 	ST_ENT(BTM_ST_SCAN, btm_scan_st_hdl),
 	ST_ENT(BTM_ST_OTD, btm_otd_st_hdl),
 	ST_ENT(BTM_ST_ROAM, btm_roam_st_hdl),
@@ -67,10 +74,12 @@ static struct fsm_state_ent btm_state_tbl[] = {
 
 /* EVENT table */
 static struct fsm_event_ent btm_event_tbl[] = {
+	EV_DBG(BTM_EV_nb_poll),
 	EV_DBG(BTM_EV_scan_deny_expire),
 	EV_DBG(BTM_EV_scan_timeout),
+	EV_DBG(BTM_EV_scan_probe_req),
+	EV_DBG(BTM_EV_scan_probe_req_timeout),
 	EV_DBG(BTM_EV_scan_found_candidate),
-	EV_DBG(BTM_EV_scan_opch_reported),
 	EV_DBG(BTM_EV_connect_timeout),
 	EV_DBG(BTM_EV_disassoc_timeout),
 	EV_DBG(BTM_EV_ft_action_timeout),
@@ -87,7 +96,11 @@ struct btm_obj {
 	u8 op_ch_reported;
 	struct roam_nb_info pnb;
 	struct wlan_network *candidate;
+	int nb_poll_times;
 	int finish;
+
+	struct sitesurvey_parm parm;
+	struct rtw_ieee80211_channel scan_ch;
 
 	/* obj default */
 	struct fsm_obj *obj;
@@ -130,9 +143,9 @@ static int btm_scan_ch_psc(struct btm_obj *pbtm, struct rtw_ieee80211_channel *o
 
 static int btm_scan_ch_sort(struct btm_obj *pbtm, struct rtw_ieee80211_channel *out, u32 out_num)
 {
-	int i, j, k, l;
+	int i, j, k;
 	struct rtw_ieee80211_channel *chs;
-	_adapter *a = obj2adp(pbtm);
+	struct _ADAPTER *a = obj2adp(pbtm);
 	u8 *band_order = a->mlmepriv.roam_scan_order;
 
 	chs = rtw_zmalloc(sizeof(struct rtw_ieee80211_channel) * out_num);
@@ -179,7 +192,7 @@ static int btm_scan_ch_sort(struct btm_obj *pbtm, struct rtw_ieee80211_channel *
 static int btm_roam_ch_decision(struct btm_obj *pbtm, struct rtw_ieee80211_channel *out,
 		u32 out_num, struct rtw_ieee80211_channel *in_ch, u32 in_num)
 {
-	_adapter *a = obj2adp(pbtm);
+	struct _ADAPTER *a = obj2adp(pbtm);
 	struct rtw_ieee80211_channel *roam_ch = NULL, *full_ch = NULL;
 	int i, j, k, roam_ch_num = 0, full_ch_num = 0;
 
@@ -246,9 +259,9 @@ roam_exit:
 static void btm_nb_scan_list_set(struct btm_obj *pbtm, struct sitesurvey_parm *pparm)
 {
 	u32 i;
-	struct roam_nb_info *pnb = &pbtm->pnb;
-	_adapter *a = obj2adp(pbtm);
+	struct _ADAPTER *a = obj2adp(pbtm);
 	struct mlme_priv *pmlmepriv = &a->mlmepriv;
+	struct roam_nb_info *pnb = &pbtm->pnb;
 
 	if (pmlmepriv->cur_network_scanned) {
 		_rtw_memcpy(&pparm->ssid[0], &pmlmepriv->cur_network_scanned->network.Ssid,
@@ -256,39 +269,61 @@ static void btm_nb_scan_list_set(struct btm_obj *pbtm, struct sitesurvey_parm *p
 		pparm->ssid_num = 1;
 	}
 
-	for (i = 0; i < pnb->nb_rpt_ch_list_num; i++) {
-		_rtw_memcpy(pparm->nb[i].bssid, pnb->nb_rpt[i].bssid, ETH_ALEN);
-		pparm->nb[i].ch = pnb->nb_rpt[i].ch_num;
+	for (i = 0; i < pnb->nb_rpt.nb_list_num; i++) {
+		_rtw_memcpy(pparm->nb[i].bssid, pnb->nb_rpt.nb_list[i].ent.bssid, ETH_ALEN);
+		pparm->nb[i].ch = pnb->nb_rpt.nb_list[i].ent.ch_num;
+		pparm->nb[i].band = pnb->nb_rpt.ch_list[i].band;
 		pparm->nb_num++;
 	}
 
 	pparm->scan_mode = RTW_PHL_SCAN_ACTIVE;
-	pparm->duration = BTM_SCAN_DWELL_TIME;
+	pparm->duration = SURVEY_TO;
 	pparm->ch_num = btm_roam_ch_decision(pbtm, pparm->ch, RTW_CHANNEL_SCAN_AMOUNT,
-		pnb->nb_rpt_ch_list, pnb->nb_rpt_ch_list_num);
+		pnb->nb_rpt.ch_list, pnb->nb_rpt.ch_list_num);
 	pnb->nb_rpt_valid = _FALSE;
 }
 
 static int btm_roam_scan(struct btm_obj *pbtm)
 {
 	_adapter *a = obj2adp(pbtm);
-	struct sitesurvey_parm *parm;
-	u8 ret = _FAIL;
-
-	parm = (struct sitesurvey_parm*)rtw_zmalloc(sizeof(*parm));
-
-	if (!parm)
-		return ret;
+	struct sitesurvey_parm *parm = &pbtm->parm;
 
 	rtw_init_sitesurvey_parm(a, parm);
 	btm_nb_scan_list_set(pbtm, parm);
 	parm->scan_type = RTW_SCAN_ROAM;
 	parm->psta = obj2sta(pbtm);
 
-	ret = rtw_sitesurvey_cmd(a, parm);
-	rtw_mfree(parm, sizeof(*parm));
+	return rtw_sitesurvey_cmd(a, parm);
+}
 
-	return ret;
+static int btm_issue_probe_req(struct btm_obj *pbtm)
+{
+	_adapter *a = obj2adp(pbtm);
+	struct sta_info *psta = obj2sta(pbtm);
+	struct _ADAPTER_LINK *al = psta->padapter_link;
+	NDIS_802_11_SSID *ssid;
+	int i, j;
+
+	if (!pbtm->parm.ssid_num) {
+		issue_probereq(a, al, NULL, NULL);
+		return _SUCCESS;
+	}
+
+	for (i = 0; i < pbtm->parm.ssid_num; i++) {
+		if (pbtm->parm.ssid[i].SsidLength == 0)
+			continue;
+
+		ssid = &pbtm->parm.ssid[i];
+
+		for (j = 0; j < pbtm->parm.nb_num; j++) {
+			if (pbtm->scan_ch.hw_value == pbtm->parm.nb[j].ch &&
+			    pbtm->scan_ch.band == pbtm->parm.nb[j].band)
+				issue_probereq(a, al, ssid, pbtm->parm.nb[j].bssid);
+		}
+		issue_probereq(a, al, ssid, NULL);
+	}
+
+	return _SUCCESS;
 }
 
 static int btm_del_obj(struct btm_obj *pbtm)
@@ -312,33 +347,30 @@ static int btm_start_st_hdl(void *obj, u16 event, void *param)
 	struct btm_obj *pbtm = (struct btm_obj *)obj;
 	_adapter *a = obj2adp(pbtm);
 	struct btm_priv *btmpriv = (struct btm_priv *)obj2priv(pbtm);
-	struct roam_nb_info *pnb = &pbtm->pnb;
-	u8 ssc_chk;
-	int i;
 
 	switch (event) {
 	case FSM_EV_STATE_IN:
-		pbtm->resp_reason = 1; /* unspecified reject reason */
-		for (i = 0; i < pnb->last_nb_rpt_entries; i++)
-			FSM_INFO(pbtm, "roam list "MAC_FMT"\n",
-				MAC_ARG(pnb->nb_rpt[i].bssid));
-		fallthrough;
-	case BTM_EV_scan_deny_expire:
-		ssc_chk = rtw_sitesurvey_condition_check(a, _FALSE);
-		if (ssc_chk == SS_DENY_BUSY_TRAFFIC) {
-			FSM_INFO(pbtm, "need to roam, don't care BusyTraffic\n");
-		} else if (ssc_chk != SS_ALLOW) {
-			rtw_fsm_set_alarm(pbtm, BTM_SCAN_DENY_WAIT, BTM_EV_scan_deny_expire);
+		if (btmpriv->btm) {
+			FSM_ERR(pbtm, "pbtm exists\n");
+			rtw_fsm_st_goto(pbtm, BTM_ST_END);
 			return _SUCCESS;
+		} else {
+			btmpriv->btm = pbtm;
 		}
-		/* Able to scan */
-		rtw_fsm_st_goto(pbtm, BTM_ST_SCAN);
+
+		pbtm->resp_reason = 1; /* unspecified reject reason */
+		if (pbtm->roam_reason & RTW_ROAM_ACTIVE &&
+			!rtw_rrm_get_nb_rpt(a, &pbtm->pnb.nb_rpt)) /* invalid */
+			rtw_fsm_st_goto(pbtm, BTM_ST_NB);
+		else
+			rtw_fsm_st_goto(pbtm, BTM_ST_SCAN);
 		break;
 	case FSM_EV_ABORT:
-	case FSM_EV_DISCONNECTED:
 		if (pbtm->roam_reason & RTW_ROAM_BTM)
 			rtw_wnm_issue_action(a, &pbtm->pnb, RTW_WLAN_ACTION_WNM_BTM_RSP,
 				pbtm->resp_reason, pbtm->pnb.btm_cache.dialog_token);
+		fallthrough;
+	case FSM_EV_DISCONNECTED: /* no need to reply btm_req */
 		rtw_fsm_st_goto(pbtm, BTM_ST_END);
 		break;
 	case FSM_EV_STATE_OUT:
@@ -351,44 +383,92 @@ static int btm_start_st_hdl(void *obj, u16 event, void *param)
 	return _SUCCESS;
 }
 
-static int btm_scan_st_hdl(void *obj, u16 event, void *param)
+static int btm_nb_req_st_hdl(void *obj, u16 event, void *param)
 {
 	struct btm_obj *pbtm = (struct btm_obj *)obj;
 	_adapter *a = obj2adp(pbtm);
+	int i, valid;
+
+	switch (event) {
+	case FSM_EV_STATE_IN:
+		/* issue NB req */
+		rm_add_nb_req(a, obj2sta(pbtm));
+
+		rtw_fsm_set_alarm(pbtm, BTM_NB_POLL_INTERVAL, BTM_EV_nb_poll);
+		pbtm->nb_poll_times = BTM_NB_POLL_TIMES;
+		break;
+	case BTM_EV_nb_poll:
+		if (rtw_rrm_get_nb_rpt(a, &pbtm->pnb.nb_rpt) || (--pbtm->nb_poll_times) == 0)
+			rtw_fsm_st_goto(pbtm, BTM_ST_SCAN); /* go ahead even there is no NB report */
+		else
+			rtw_fsm_set_alarm(pbtm, BTM_NB_POLL_INTERVAL, BTM_EV_nb_poll);
+		break;
+	case FSM_EV_ABORT:
+		if (pbtm->roam_reason & RTW_ROAM_BTM)
+			rtw_wnm_issue_action(a, &pbtm->pnb, RTW_WLAN_ACTION_WNM_BTM_RSP,
+				pbtm->resp_reason, pbtm->pnb.btm_cache.dialog_token);
+		fallthrough;
+	case FSM_EV_DISCONNECTED: /* no need to reply btm_req */
+		rtw_fsm_st_goto(pbtm, BTM_ST_END);
+		break;
+	case FSM_EV_STATE_OUT:
+		rtw_fsm_cancel_alarm(pbtm);
+		for (i = 0; i < pbtm->pnb.nb_rpt.nb_list_num; i++)
+			FSM_INFO(pbtm, "roam list "MAC_FMT"\n",
+				MAC_ARG(pbtm->pnb.nb_rpt.nb_list[i].ent.bssid));
+		break;
+	default:
+		break;
+	}
+
+	return _SUCCESS;
+}
+
+static int btm_scan_st_hdl(void *obj, u16 event, void *param)
+{
+	struct btm_obj *pbtm = (struct btm_obj *)obj;
+	struct _ADAPTER *a = obj2adp(pbtm);
 	struct mlme_priv *pmlmepriv = &a->mlmepriv;
 	struct roam_nb_info *pnb = &pbtm->pnb;
 	struct wlan_network *pnetwork = NULL;
 	struct wlan_network *cnetwork = pmlmepriv->cur_network_scanned;
 	struct roam_nb_info *mlmepriv_pnb = &(pmlmepriv->nb_info);
+	u8 ssc_chk;
 
 	switch (event) {
 	case FSM_EV_STATE_IN:
+	case BTM_EV_scan_deny_expire:
+		ssc_chk = rtw_sitesurvey_condition_check(a, _FALSE);
+		if (ssc_chk == SS_DENY_BUSY_TRAFFIC) {
+			FSM_INFO(pbtm, "need to roam, don't care BusyTraffic\n");
+		} else if (ssc_chk != SS_ALLOW) {
+			rtw_fsm_set_alarm(pbtm, BTM_SCAN_DENY_WAIT, BTM_EV_scan_deny_expire);
+			return _SUCCESS;
+		}
+
+		/* Able to scan */
 		if (!btm_roam_scan(pbtm)) {
 			rtw_fsm_st_goto(pbtm, BTM_ST_END);
 			return _SUCCESS;
 		}
-		pbtm->op_ch_reported = 0;
 		/* Set scan timeout */
 		rtw_fsm_set_alarm(pbtm, BTM_SCAN_TIMEOUT, BTM_EV_scan_timeout);
 		break;
-	case BTM_EV_scan_opch_reported:
-		pbtm->op_ch_reported = 1;
+	case BTM_EV_scan_probe_req:
+		memcpy((void *)&pbtm->scan_ch, param, sizeof(struct rtw_ieee80211_channel));
+		rtw_fsm_set_alarm_ext(pbtm, 10, BTM_EV_scan_probe_req_timeout, 2, NULL);
+		fallthrough;
+	case BTM_EV_scan_probe_req_timeout:
+		btm_issue_probe_req(pbtm);
 		break;
 	case BTM_EV_scan_found_candidate:
 		pnetwork = (struct wlan_network *)param;
 
+		if (a->fsmpriv.btmpriv.is_op_ch)
+			return _SUCCESS;
+
 		FSM_DBG(pbtm, "Recv %s ("MAC_FMT")\n",pnetwork->network.Ssid.Ssid,
 			MAC_ARG(pnetwork->network.MacAddress));
-
-		if ((pnetwork->network.Configuration.DSConfig ==\
-			cnetwork->network.Configuration.DSConfig) &&
-			(pnetwork->network.Configuration.Band ==\
-			 cnetwork->network.Configuration.Band)) {
-
-			if (pbtm->op_ch_reported) /* already reported */
-				return _SUCCESS;
-			rtw_fsm_set_alarm_ext(pbtm, 100, BTM_EV_scan_opch_reported, 1, NULL);
-		}
 
 		if (pbtm->roam_reason & RTW_ROAM_ACTIVE)
 			rtw_check_roaming_candidate(pmlmepriv, &pbtm->candidate, pnetwork);
@@ -423,17 +503,7 @@ static int btm_scan_st_hdl(void *obj, u16 event, void *param)
 				rtw_fsm_st_goto(pbtm, BTM_ST_END);
 				return _SUCCESS;
 			}
-			if (!pbtm->candidate) {
-				FSM_INFO(pbtm, "Pick a candidate from scan queue\n");
-#ifdef DBG_WNM_UNIT_TEST
-				pbtm->candidate = rtw_wnm_btm_candidate_select(a, pnb);
-#else
-				if (!rtw_mbo_wifi_logo_test(a))
-					pbtm->candidate = rtw_select_roaming_candidate(pmlmepriv);
-				else
-					pbtm->candidate = rtw_wnm_btm_candidate_select(a, pnb);
-#endif
-			}
+
 			if (pbtm->candidate) {
 				_rtw_memcpy(pnb->roam_target_addr,
 					(u8 *)&pbtm->candidate->network.MacAddress,
@@ -444,6 +514,13 @@ static int btm_scan_st_hdl(void *obj, u16 event, void *param)
 				_rtw_memcpy(mlmepriv_pnb->roam_target_addr,
 					(u8 *)&pbtm->candidate->network.MacAddress,
 					ETH_ALEN);
+			} else {
+				FSM_INFO(pbtm, "Pick a candidate from scan queue\n");
+
+				if (rtw_mbo_wifi_logo_test(a) || rtw_chk_roam_flags(a, RTW_ROAM_BTM_IGNORE_DELTA))
+					pbtm->candidate = rtw_wnm_btm_candidate_select(a, pnb);
+				else
+					pbtm->candidate = rtw_select_roaming_candidate(pmlmepriv);
 			}
 
 		} else if (pbtm->roam_reason & RTW_ROAM_ON_RESUME) {
@@ -478,6 +555,17 @@ static int btm_scan_st_hdl(void *obj, u16 event, void *param)
 	case FSM_EV_STATE_OUT:
 		rtw_fsm_cancel_alarm(pbtm);
 		rtw_fsm_cancel_alarm_ext(pbtm, 1);
+		rtw_fsm_cancel_alarm_ext(pbtm, 2);
+
+		if (pbtm->candidate)
+			FSM_INFO(pbtm, "rtw_select_roam_candidate: %s("MAC_FMT", ch:%u) rssi:%d\n",
+				pbtm->candidate->network.Ssid.Ssid,
+				MAC_ARG(pbtm->candidate->network.MacAddress),
+				pbtm->candidate->network.Configuration.DSConfig,
+				(int)pbtm->candidate->network.PhyInfo.rssi);
+		else
+			FSM_INFO(pbtm, "rtw_select_roam_candidate: NULL\n");
+
 		if (pbtm->roam_reason & RTW_ROAM_BTM)
 			rtw_wnm_issue_action(a, pnb, RTW_WLAN_ACTION_WNM_BTM_RSP,
 				pbtm->resp_reason, pnb->btm_cache.dialog_token);
@@ -492,9 +580,7 @@ static int btm_scan_st_hdl(void *obj, u16 event, void *param)
 static int btm_otd_st_hdl(void *obj, u16 event, void *param)
 {
 	struct btm_obj *pbtm = (struct btm_obj *)obj;
-	_adapter *a = obj2adp(pbtm);
-	struct mlme_priv *pmlmepriv = &a->mlmepriv;
-	struct ft_roam_info *pft_roam = &(pmlmepriv->ft_roam);
+	struct _ADAPTER *a = obj2adp(pbtm);
 
 	switch (event) {
 	case FSM_EV_STATE_IN:
@@ -531,16 +617,22 @@ static int btm_otd_st_hdl(void *obj, u16 event, void *param)
 static int btm_roam_st_hdl(void *obj, u16 event, void *param)
 {
 	struct btm_obj *pbtm = (struct btm_obj *)obj;
-	_adapter *a = obj2adp(pbtm);
+	struct _ADAPTER *a = obj2adp(pbtm);
 	struct mlme_priv *pmlmepriv = &a->mlmepriv;
 	struct mlme_ext_info *pmlmeinfo = &a->mlmeextpriv.mlmext_info;
+	struct sta_info *psta = obj2sta(pbtm);
+	struct _ADAPTER_LINK *al = psta->padapter_link;
 
 	switch (event) {
 	case FSM_EV_STATE_IN:
-		RTW_INFO("roaming from %s("MAC_FMT"), length:%d\n",
+		FSM_INFO(pbtm, "roam from %s("MAC_FMT", ch:%d) rssi:%d\n",
 			pmlmepriv->dev_cur_network.network.Ssid.Ssid,
 			MAC_ARG(pmlmepriv->dev_cur_network.network.MacAddress),
-			pmlmepriv->dev_cur_network.network.Ssid.SsidLength);
+			pmlmepriv->dev_cur_network.network.Configuration.DSConfig,
+			a->recvinfo.bcn_rssi);
+
+		_rtw_memcpy(&pmlmepriv->roam_from_addr,
+			pmlmepriv->dev_cur_network.network.MacAddress, ETH_ALEN);
 
 		if (pbtm->pnb.btm_cache.req_mode & DISASSOC_IMMINENT) {
 			/* indicates that the STA is to be disassociated
@@ -557,13 +649,18 @@ static int btm_roam_st_hdl(void *obj, u16 event, void *param)
 			pmlmeinfo->disconnect_code = DISCONNECTION_BY_DRIVER_DUE_TO_ROAMING;
 		}
 
+		/* issue null date to pause TX from AP */
+		issue_nulldata(a, al, NULL, 1, 1, 0);
+
 		receive_disconnect(a, pmlmepriv->dev_cur_network.network.MacAddress
-			, WLAN_REASON_ACTIVE_ROAM, _FALSE);
+			, WLAN_REASON_ACTIVE_ROAM, _TRUE);
 		break;
 	case FSM_EV_DISCONNECTED:
-		FSM_INFO(pbtm, "roaming to %s(" MAC_FMT ")\n",
+		FSM_INFO(pbtm, "roam to %s("MAC_FMT", ch:%d) rssi:%d\n",
 			pbtm->candidate->network.Ssid.Ssid,
-			MAC_ARG(pbtm->candidate->network.MacAddress));
+			MAC_ARG(pbtm->candidate->network.MacAddress),
+			pbtm->candidate->network.Configuration.DSConfig,
+			pbtm->candidate->network.PhyInfo.rssi);
 
 		_rtw_memcpy(&pmlmepriv->assoc_ssid,
 			&pmlmepriv->dev_cur_network.network.Ssid, sizeof(NDIS_802_11_SSID));
@@ -574,8 +671,15 @@ static int btm_roam_st_hdl(void *obj, u16 event, void *param)
 		/* Start to connect */
 		if (!rtw_do_join(a)) {
 			rtw_fsm_st_goto(pbtm, BTM_ST_END);
+			return _SUCCESS;
 		}
+#if 1
+		/* finish when disconnected */
+		pbtm->finish = _SUCCESS;
+		rtw_fsm_st_goto(pbtm, BTM_ST_END);
+#else
 		rtw_fsm_set_alarm(pbtm, BTM_CONNECT_WAIT, BTM_EV_connect_timeout);
+#endif
 		break;
 	case FSM_EV_CONNECTED:
 		pbtm->finish = _SUCCESS;
@@ -603,7 +707,7 @@ static int btm_roam_st_hdl(void *obj, u16 event, void *param)
 static int btm_end_st_hdl(void *obj, u16 event, void *param)
 {
 	struct btm_obj *pbtm = (struct btm_obj *)obj;
-	_adapter *a = obj2adp(pbtm);
+	struct _ADAPTER *a = obj2adp(pbtm);
 
 	switch (event) {
 	case FSM_EV_STATE_IN:
@@ -612,7 +716,7 @@ static int btm_end_st_hdl(void *obj, u16 event, void *param)
 			rtw_set_to_roam(a, 0);
 			rtw_ft_reset_status(a);
 			if (pbtm->candidate) /* driver disconnected */
-				rtw_indicate_disconnect(a, 0, _FALSE);
+				rtw_indicate_disconnect(a, 0, _TRUE);
 		}
 		btm_del_obj(pbtm);
 		break;
@@ -639,15 +743,11 @@ static void btm_dump_fsm_cb(void *fsm, char *p, int *sz)
 
 static int btm_init_priv_cb(void *priv)
 {
-	struct btm_priv *pbtmpriv = (struct btm_priv *)priv;
-
 	return _SUCCESS;
 }
 
 static int btm_deinit_priv_cb(void *priv)
 {
-	struct btm_priv *pbtmpriv = (struct btm_priv *)priv;
-
 	return _SUCCESS;
 }
 
@@ -657,12 +757,21 @@ static void btm_debug(void *obj, char input[][MAX_ARGV], u32 input_num,
 	return;
 }
 
+static u16 btm_new_cid(struct btm_priv *btmpriv)
+{
+	do {
+		btmpriv->id_seq++;
+	} while (btmpriv->id_seq == 0);
+
+	return (btmpriv->id_seq << 8);
+}
+
 /* For EXTERNAL application to create a btm object
  * return
  * btm_obj: ptr to new btm object
  */
 int rtw_btm_new_obj(_adapter *a, struct sta_info *psta,
-	struct roam_nb_info *pnb, u8 roam_reason)
+	struct roam_nb_info *pnb, u16 roam_reason)
 {
 	struct btm_priv *btmpriv = &a->fsmpriv.btmpriv;
 	struct fsm_main *fsm = btmpriv->fsm;
@@ -689,6 +798,8 @@ int rtw_btm_new_obj(_adapter *a, struct sta_info *psta,
 
 	if (roam_reason == RTW_ROAM_BTM)
 		cid = pnb->btm_cache.dialog_token;
+	else
+		cid = btm_new_cid(btmpriv);
 
 	obj = rtw_fsm_new_obj(fsm, psta, cid, (void **)&pbtm, sizeof(*pbtm));
 
@@ -702,12 +813,14 @@ int rtw_btm_new_obj(_adapter *a, struct sta_info *psta,
 	pbtm->roam_reason = roam_reason;
 	pbtm->finish = _FAIL;
 
-	_rtw_memcpy(&pbtm->pnb, pnb, sizeof(*pnb));
+	if (roam_reason == RTW_ROAM_BTM)
+		_rtw_memcpy(&pbtm->pnb, pnb, sizeof(*pnb));
+	else /* copy from rrm */
+		rtw_rrm_get_nb_rpt(a, &pbtm->pnb.nb_rpt);
 
 	/* activate it immediately */
 	rtw_fsm_activate_obj(pbtm);
 	pmlmepriv->need_to_roam = _TRUE;
-	btmpriv->btm = pbtm;
 	psta->btm = pbtm;
 
 	return _SUCCESS;
@@ -720,7 +833,7 @@ void rtw_btm_notify_action_resp(struct btm_obj *pbtm)
 
 void rtw_btm_notify_scan_found_candidate(struct btm_obj *pbtm, struct wlan_network *pnetwork)
 {
-	_adapter *a = obj2adp(pbtm);
+	struct _ADAPTER *a = obj2adp(pbtm);
 
 	if (!rtw_chk_roam_flags(a, RTW_ROAM_QUICK_SCAN))
 		return;
@@ -728,6 +841,15 @@ void rtw_btm_notify_scan_found_candidate(struct btm_obj *pbtm, struct wlan_netwo
 	if (!pnetwork)
 		return;
 	rtw_fsm_gen_msg(pbtm, (void *)pnetwork, 0, BTM_EV_scan_found_candidate);
+}
+
+void rtw_btm_notify_scan_probe_req(struct btm_obj *pbtm, struct phl_scan_channel *scan_ch)
+{
+	struct rtw_ieee80211_channel ch;
+
+	ch.hw_value = scan_ch->channel;
+	ch.band = scan_ch->band;
+	rtw_fsm_gen_msg(pbtm, &ch, sizeof(ch), BTM_EV_scan_probe_req);
 }
 
 /* For EXTERNAL application to create RRM FSM */
