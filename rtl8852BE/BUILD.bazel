@@ -1,5 +1,4 @@
-load("@kleaf//build/kernel/kleaf:kernel.bzl", "ddk_module")
-load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers", "ddk_module")
 
 filegroup(
     name = "driver_files",
@@ -502,7 +501,7 @@ ddk_module(
     "-Wno-date-time",
     "-DRTW_NETWORK_LINK_MAX=3",
     "-DDTYPE=DEV_TYPE_LEGACY",
-    "-DCONFIG_RTW_ANDROID=0",
+    "-DCONFIG_RTW_ANDROID=16",
     "-Wno-uninitialized",
     "-Wno-enum-conversion",
     "-Wno-fortify-source",
@@ -555,7 +554,7 @@ ddk_module(
     "-DCONFIG_RTW_NETIF_SG",
     "-DCONFIG_RTW_DEBUG",
     "-DRTW_LOG_LEVEL=3",
-    "-DRTW_PHL_LOG_LEVEL=3",
+    "-DRTW_PHL_LOG_LEVEL=0",
     "-DCONFIG_PROC_DEBUG",
     "-DCONFIG_SELF_DIAG_INFO",
     "-DCONFIG_RTW_UP_MAPPING_RULE=0",
