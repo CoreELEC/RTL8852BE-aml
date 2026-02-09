@@ -1061,23 +1061,60 @@ check_bss:
 		#else
 		roam_info.bssid = cur_network->network.MacAddress;
 		#endif
-		roam_info.req_ie = pmlmepriv->assoc_req + sizeof(struct rtw_ieee80211_hdr_3addr) + 2;
-		roam_info.req_ie_len = pmlmepriv->assoc_req_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 2;
-		roam_info.resp_ie = pmlmepriv->assoc_rsp + sizeof(struct rtw_ieee80211_hdr_3addr) + 6;
-		roam_info.resp_ie_len = pmlmepriv->assoc_rsp_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 6;
+
+		/*
+		 * Guard against malformed/short assoc_req/assoc_rsp buffers.
+		 * cfg80211 APIs expect pointers to the IE region and the remaining
+		 * length. If the saved buffer is shorter than the expected fixed
+		 * header, avoid underflow and pass NULL/0 instead.
+		 */
+		{
+			u8 *req_ie = NULL, *resp_ie = NULL;
+			u32 req_ie_len = 0, resp_ie_len = 0;
+			u32 hdr_len = sizeof(struct rtw_ieee80211_hdr_3addr);
+
+			if (pmlmepriv->assoc_req && pmlmepriv->assoc_req_len > hdr_len + 2) {
+				req_ie = pmlmepriv->assoc_req + hdr_len + 2;
+				req_ie_len = pmlmepriv->assoc_req_len - hdr_len - 2;
+			}
+
+			if (pmlmepriv->assoc_rsp && pmlmepriv->assoc_rsp_len > hdr_len + 6) {
+				resp_ie = pmlmepriv->assoc_rsp + hdr_len + 6;
+				resp_ie_len = pmlmepriv->assoc_rsp_len - hdr_len - 6;
+			}
+
+			roam_info.req_ie = req_ie;
+			roam_info.req_ie_len = req_ie_len;
+			roam_info.resp_ie = resp_ie;
+			roam_info.resp_ie_len = resp_ie_len;
+		}
 
 		cfg80211_roamed(padapter->pnetdev, &roam_info, GFP_ATOMIC);
 		#else
-		cfg80211_roamed(padapter->pnetdev
-			#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 39) || defined(COMPAT_KERNEL_RELEASE)
-			, notify_channel
-			#endif
-			, cur_network->network.MacAddress
-			, pmlmepriv->assoc_req + sizeof(struct rtw_ieee80211_hdr_3addr) + 2
-			, pmlmepriv->assoc_req_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 2
-			, pmlmepriv->assoc_rsp + sizeof(struct rtw_ieee80211_hdr_3addr) + 6
-			, pmlmepriv->assoc_rsp_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 6
-			, GFP_ATOMIC);
+		{
+			u8 *req_ie = NULL, *resp_ie = NULL;
+			u32 req_ie_len = 0, resp_ie_len = 0;
+			u32 hdr_len = sizeof(struct rtw_ieee80211_hdr_3addr);
+
+			if (pmlmepriv->assoc_req && pmlmepriv->assoc_req_len > hdr_len + 2) {
+				req_ie = pmlmepriv->assoc_req + hdr_len + 2;
+				req_ie_len = pmlmepriv->assoc_req_len - hdr_len - 2;
+			}
+
+			if (pmlmepriv->assoc_rsp && pmlmepriv->assoc_rsp_len > hdr_len + 6) {
+				resp_ie = pmlmepriv->assoc_rsp + hdr_len + 6;
+				resp_ie_len = pmlmepriv->assoc_rsp_len - hdr_len - 6;
+			}
+
+			cfg80211_roamed(padapter->pnetdev
+				#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 39) || defined(COMPAT_KERNEL_RELEASE)
+				, notify_channel
+				#endif
+				, cur_network->network.MacAddress
+				, req_ie, req_ie_len
+				, resp_ie, resp_ie_len
+				, GFP_ATOMIC);
+		}
 		#endif /*LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)*/
 
 		RTW_INFO(FUNC_ADPT_FMT" call cfg80211_roamed\n", FUNC_ADPT_ARG(padapter));
@@ -1091,13 +1128,26 @@ check_bss:
 		RTW_INFO("pwdev->sme_state(b)=%d\n", pwdev->sme_state);
 		#endif
 
-		if (check_fwstate(pmlmepriv, WIFI_MONITOR_STATE) != _TRUE)
+		if (check_fwstate(pmlmepriv, WIFI_MONITOR_STATE) != _TRUE) {
+			u8 *req_ie = NULL, *resp_ie = NULL;
+			u32 req_ie_len = 0, resp_ie_len = 0;
+			u32 hdr_len = sizeof(struct rtw_ieee80211_hdr_3addr);
+
+			if (pmlmepriv->assoc_req && pmlmepriv->assoc_req_len > hdr_len + 2) {
+				req_ie = pmlmepriv->assoc_req + hdr_len + 2;
+				req_ie_len = pmlmepriv->assoc_req_len - hdr_len - 2;
+			}
+
+			if (pmlmepriv->assoc_rsp && pmlmepriv->assoc_rsp_len > hdr_len + 6) {
+				resp_ie = pmlmepriv->assoc_rsp + hdr_len + 6;
+				resp_ie_len = pmlmepriv->assoc_rsp_len - hdr_len - 6;
+			}
+
 			rtw_cfg80211_connect_result(pwdev, cur_network->network.MacAddress
-				, pmlmepriv->assoc_req + sizeof(struct rtw_ieee80211_hdr_3addr) + 2
-				, pmlmepriv->assoc_req_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 2
-				, pmlmepriv->assoc_rsp + sizeof(struct rtw_ieee80211_hdr_3addr) + 6
-				, pmlmepriv->assoc_rsp_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 6
+				, req_ie, req_ie_len
+				, resp_ie, resp_ie_len
 				, WLAN_STATUS_SUCCESS, GFP_ATOMIC);
+		}
 		#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0) || defined(COMPAT_KERNEL_RELEASE)
 		RTW_INFO("pwdev->sme_state(a)=%d\n", pwdev->sme_state);
 		#endif

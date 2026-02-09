@@ -213,7 +213,7 @@ void rtw_sleep_schedulable(int ms)
 void rtw_msleep_os(int ms)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36))
-	if (ms < 20) {
+	if (ms < 9) {
 		unsigned long us = ms * 1000UL;
 		usleep_range(us, us + 1000UL);
 	} else
