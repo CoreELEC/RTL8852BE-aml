@@ -275,8 +275,10 @@ static inline void *_kmalloc(size_t size, gfp_t flags, int clear)
 	if (rtkm_phy_list[order].entries == rtkm_phy_list[order].used) {
 		if (rtkm_mem_exp) {
 			warn = _TRUE;
+#if 0
 			pr_warn("%s: No enough order-%d pool\n", __func__,
 				order);
+#endif
 			entry = create_mem_entry(order);
 			if (entry) {
 				list_add_tail(
@@ -311,6 +313,7 @@ static inline void *_kmalloc(size_t size, gfp_t flags, int clear)
 		rtkm_phy_list[order].peak = rtkm_phy_list[order].used;
 	_rtw_spinunlock_bh(&rtkm_phy_list[order].lock);
 
+#if 0
 	if ((warn) || TRACE_ORDER(rtkm_trace, order)) {
 		pr_info("%s: require(%p, %zu) usage(%d %u/%u)\n", __func__,
 			entry->data, entry->size, order,
@@ -318,6 +321,7 @@ static inline void *_kmalloc(size_t size, gfp_t flags, int clear)
 			rtkm_phy_list[order].entries);
 		stacktrace_print(entry, MAX_STACK_TRACE, 0);
 	}
+#endif
 
 	return entry->data;
 }

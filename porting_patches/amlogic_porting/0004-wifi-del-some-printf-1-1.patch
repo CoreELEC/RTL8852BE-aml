@@ -1,0 +1,57 @@
+From 70950e1588cd44646534622ff0d828c804ae666c Mon Sep 17 00:00:00 2001
+From: "jiabin.chen" <jiabin.chen@amlogic.com>
+Date: Tue, 17 Mar 2026 11:03:21 +0800
+Subject: [PATCH] wifi: del some printf [1/1]
+
+PD#SWPL-226761
+
+Problem:
+printf enough order -1
+but work ok
+
+Solution:
+del some printf
+
+Verify:
+tyson
+
+Change-Id: I61a2eadd36497e240daf59f16e68df751afea3f5
+Signed-off-by: jiabin.chen <jiabin.chen@amlogic.com>
+---
+ rtl8852BE/core/rtw_prealloc.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/rtl8852BE/core/rtw_prealloc.c b/rtl8852BE/core/rtw_prealloc.c
+index dadaecd..fbf255b 100644
+--- a/rtl8852BE/core/rtw_prealloc.c
++++ b/rtl8852BE/core/rtw_prealloc.c
+@@ -275,8 +275,10 @@ static inline void *_kmalloc(size_t size, gfp_t flags, int clear)
+ 	if (rtkm_phy_list[order].entries == rtkm_phy_list[order].used) {
+ 		if (rtkm_mem_exp) {
+ 			warn = _TRUE;
++#if 0
+ 			pr_warn("%s: No enough order-%d pool\n", __func__,
+ 				order);
++#endif
+ 			entry = create_mem_entry(order);
+ 			if (entry) {
+ 				list_add_tail(
+@@ -311,6 +313,7 @@ static inline void *_kmalloc(size_t size, gfp_t flags, int clear)
+ 		rtkm_phy_list[order].peak = rtkm_phy_list[order].used;
+ 	_rtw_spinunlock_bh(&rtkm_phy_list[order].lock);
+ 
++#if 0
+ 	if ((warn) || TRACE_ORDER(rtkm_trace, order)) {
+ 		pr_info("%s: require(%p, %zu) usage(%d %u/%u)\n", __func__,
+ 			entry->data, entry->size, order,
+@@ -318,6 +321,7 @@ static inline void *_kmalloc(size_t size, gfp_t flags, int clear)
+ 			rtkm_phy_list[order].entries);
+ 		stacktrace_print(entry, MAX_STACK_TRACE, 0);
+ 	}
++#endif
+ 
+ 	return entry->data;
+ }
+-- 
+2.42.0
+
