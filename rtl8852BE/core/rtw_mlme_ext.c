@@ -5182,16 +5182,17 @@ void update_mgntframe_attrib(_adapter *padapter, struct _ADAPTER_LINK *padapter_
 	/* _rtw_memset((u8 *)(pattrib), 0, sizeof(struct pkt_attrib)); */
 
 	bmc_sta = rtw_get_bcmc_stainfo(padapter, padapter_link);
-	if (bmc_sta == NULL) {
-		RTW_ERR("%s bmc_sta=NULL\n", __func__);
-		rtw_warn_on(1);
+	if (bmc_sta == NULL || bmc_sta->phl_sta == NULL) {
+		RTW_ERR("%s bmc_sta or bmc_sta->phl_sta is NULL\n", __func__);
+		// rtw_warn_on(1);
+		pattrib->mac_id = 0;
+	} else {
+		pattrib->mac_id = bmc_sta->phl_sta->macid;
 	}
 	pattrib->type = WIFI_MGT_TYPE;
 	pattrib->hdrlen = 24;
 	pattrib->nr_frags = 1;
 	pattrib->priority = 8;
-	if (bmc_sta != NULL)
-		pattrib->mac_id = bmc_sta->phl_sta->macid;
 	pattrib->adapter_link = padapter_link;
 
 #ifdef CONFIG_P2P_PS_NOA_USE_MACID_SLEEP

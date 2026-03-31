@@ -1,0 +1,52 @@
+From 2584ed413aa7fb41414893de79b9d9b39a4a0f55 Mon Sep 17 00:00:00 2001
+From: "jiabin.chen" <jiabin.chen@amlogic.com>
+Date: Tue, 31 Mar 2026 11:17:11 +0800
+Subject: [PATCH] wifi: fix mlme warning [1/1]
+
+PD#SWPL-261236
+
+Problem:
+pc : update_mgntframe_attrib+0x64/0x180 [8852be]
+
+Solution:
+Perform protection processing when BMC_STA is empty.
+
+Verify:
+tyson
+
+Change-Id: Ife62612270bb24406be39d4ee1b80d14c29c088f
+Signed-off-by: jiabin.chen <jiabin.chen@amlogic.com>
+---
+ rtl8852BE/core/rtw_mlme_ext.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/rtl8852BE/core/rtw_mlme_ext.c b/rtl8852BE/core/rtw_mlme_ext.c
+index 429f0c7..c1b30de 100755
+--- a/rtl8852BE/core/rtw_mlme_ext.c
++++ b/rtl8852BE/core/rtw_mlme_ext.c
+@@ -5182,16 +5182,17 @@ void update_mgntframe_attrib(_adapter *padapter, struct _ADAPTER_LINK *padapter_
+ 	/* _rtw_memset((u8 *)(pattrib), 0, sizeof(struct pkt_attrib)); */
+ 
+ 	bmc_sta = rtw_get_bcmc_stainfo(padapter, padapter_link);
+-	if (bmc_sta == NULL) {
+-		RTW_ERR("%s bmc_sta=NULL\n", __func__);
+-		rtw_warn_on(1);
++	if (bmc_sta == NULL || bmc_sta->phl_sta == NULL) {
++		RTW_ERR("%s bmc_sta or bmc_sta->phl_sta is NULL\n", __func__);
++		// rtw_warn_on(1);
++		pattrib->mac_id = 0;
++	} else {
++		pattrib->mac_id = bmc_sta->phl_sta->macid;
+ 	}
+ 	pattrib->type = WIFI_MGT_TYPE;
+ 	pattrib->hdrlen = 24;
+ 	pattrib->nr_frags = 1;
+ 	pattrib->priority = 8;
+-	if (bmc_sta != NULL)
+-		pattrib->mac_id = bmc_sta->phl_sta->macid;
+ 	pattrib->adapter_link = padapter_link;
+ 
+ #ifdef CONFIG_P2P_PS_NOA_USE_MACID_SLEEP
+-- 
+2.42.0
+
