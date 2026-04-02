@@ -491,6 +491,13 @@ struct rtw_aoac_report {
 	u8 igtk_key_id[8];
 	u8 igtk_ipn[8];
 	u8 igtk[32];
+	u8 csa_pri_ch;
+	u8 csa_bw:4;
+	u8 csa_ch_offset:4;
+	u8 csa_chsw_failed:1;
+	u8 csa_ch_band:2;
+	u8 csa_rsvd0:5;
+	u8 csa_rsvd1;
 };
 
 #ifdef CONFIG_WOWLAN
@@ -500,12 +507,14 @@ enum rtw_phl_status rtw_phl_cfg_keep_alive_info(void *phl, struct rtw_keep_alive
 enum rtw_phl_status rtw_phl_cfg_disc_det_info(void *phl, struct rtw_disc_det_info *info);
 void rtw_phl_cfg_nlo_info(void *phl, struct rtw_nlo_info *info);
 void rtw_phl_cfg_periodic_wake_info(void *phl, struct rtw_periodic_wake_info *info);
+void rtw_phl_cfg_wow_csa_info(void *phl, struct rtw_hal_mac_sta_csa *info);
 void rtw_phl_cfg_arp_ofld_info(void *phl, struct rtw_arp_ofld_info *info);
 void rtw_phl_cfg_ndp_ofld_info(void *phl, struct rtw_ndp_ofld_info *info);
 #ifdef CONFIG_PHL_MDNS_OFFLOAD
 void rtw_phl_cfg_mdns_ofld_info(void *phl, struct rtw_mdns_ofld_info *info);
 #endif
 enum rtw_phl_status rtw_phl_remove_wow_ptrn_info(void *phl, u8 phl_ptrn_id);
+enum rtw_phl_status rtw_phl_get_wow_ptrn_info(void *phl, struct rtw_wowcam_upd_info *info, u8 wowcam_id);
 enum rtw_phl_status rtw_phl_add_wow_ptrn_info(void *phl, struct rtw_wowcam_upd_info *info, u8 *phl_ptrn_id);
 enum rtw_phl_status rtw_phl_cfg_gtk_ofld_info(void *phl, struct rtw_gtk_ofld_info *info);
 enum rtw_phl_status rtw_phl_cfg_realwow_info(void *phl, struct rtw_realwow_info *info);

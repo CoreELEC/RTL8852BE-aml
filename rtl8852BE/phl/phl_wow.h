@@ -103,6 +103,7 @@ struct phl_wow_info {
 #ifdef CONFIG_PHL_APF
 	struct phl_apf_info *apf_info;
 #endif
+	struct rtw_hal_mac_sta_csa wow_csa_info;
 
 	/* info to core */
 	enum rtw_mac_wow_wake_reason wake_rsn;

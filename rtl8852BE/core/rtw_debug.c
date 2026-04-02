@@ -4813,11 +4813,13 @@ ssize_t proc_set_wow_enable(struct file *file, const char __user *buffer,
 
 int proc_get_pattern_info(struct seq_file *m, void *v)
 {
-// TODO(jw.hou): Get pattern info from PHL.
-#if 0
 	struct net_device *dev = m->private;
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
-	struct pwrctrl_priv *pwrpriv = adapter_to_pwrctl(padapter);
+	struct dvobj_priv *dvobj = adapter_to_dvobj(padapter);
+	void *phl = GET_PHL_INFO(dvobj);
+	struct registry_priv  *registry_par = &padapter->registrypriv;
+	struct rtw_wowcam_upd_info wowcam_info;
+	enum rtw_phl_status status = RTW_PHL_STATUS_FAILURE;
 	u8 val8;
 	char str_1[128];
 	char *p_str;
@@ -4827,17 +4829,22 @@ int proc_get_pattern_info(struct seq_file *m, void *v)
 	p_str = str_1;
 	max_len = sizeof(str_1);
 
-	total = pwrpriv->wowlan_pattern_idx;
-
-	rtw_set_default_pattern(padapter);
+	rtw_wow_pattern_clean(padapter, RTW_DEFAULT_PATTERN);
+	if (registry_par->wakeup_event & BIT(1)) {
+		rtw_set_default_pattern(padapter);
+	}
 
 	/*show pattern*/
 	RTW_PRINT_SEL(m, "\n======[Pattern Info.]======\n");
 	RTW_PRINT_SEL(m, "pattern number: %d\n", total);
 	RTW_PRINT_SEL(m, "support default patterns: %c\n",
-		      (pwrpriv->default_patterns_en) ? 'Y' : 'N');
+		      (registry_par->wakeup_event & BIT(1)) ? 'Y' : 'N');
 
-	for (k = 0; k < total ; k++) {
+	for (k = 0; k < MAX_WOW_CAM_NUM ; k++) {
+		status = rtw_phl_get_wow_ptrn_info(phl, &wowcam_info, k);
+		if (status == RTW_PHL_STATUS_INVALID_PARAM)
+			continue;/*null pattern and find next*/
+
 		RTW_PRINT_SEL(m, "\npattern idx: %d\n", k);
 		RTW_PRINT_SEL(m, "pattern content:\n");
 
@@ -4847,7 +4854,7 @@ int proc_get_pattern_info(struct seq_file *m, void *v)
 			_rtw_memset(p_str, 0, max_len);
 			len = 0;
 			for (j = 0 ; j < 8 ; j++) {
-				val8 = pwrpriv->patterns[k].content[i * 8 + j];
+				val8 = wowcam_info.ptrn[i * 8 + j];
 				len += snprintf(p_str + len, max_len - len,
 						"%02x ", val8);
 			}
@@ -4858,7 +4865,7 @@ int proc_get_pattern_info(struct seq_file *m, void *v)
 			_rtw_memset(p_str, 0, max_len);
 			len = 0;
 			for (j = 0 ; j < 8 ; j++) {
-				val8 = pwrpriv->patterns[k].mask[i * 8 + j];
+				val8 = wowcam_info.mask[i * 8 + j];
 				len += snprintf(p_str + len, max_len - len,
 						"%02x ", val8);
 			}
@@ -4866,10 +4873,9 @@ int proc_get_pattern_info(struct seq_file *m, void *v)
 		}
 
 		RTW_PRINT_SEL(m, "\npriv_pattern_len:\n");
-		RTW_PRINT_SEL(m, "pattern_len: %d\n", pwrpriv->patterns[k].len);
+		RTW_PRINT_SEL(m, "pattern_len: %d\n", wowcam_info.ptrn_len);
 		RTW_PRINT_SEL(m, "*****************\n");
 	}
-#endif
 
 	return 0;
 }
@@ -4982,6 +4988,19 @@ int proc_get_wakeup_reason(struct seq_file *m, void *v)
 	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
 
 	RTW_PRINT_SEL(m, "last wake reason: 0x%02x\n", wowpriv->wow_wake_reason);
+
+	return 0;
+}
+
+int proc_get_wakeup_pattern_idx(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *padapter = (_adapter *)rtw_netdev_priv(dev);
+	struct wow_priv *wowpriv = adapter_to_wowlan(padapter);
+	u8 reason = wowpriv->wow_wake_reason;
+	u8 pattern_idx = wowpriv->wowlan_aoac_rpt.wow_pattern_idx;
+
+	RTW_PRINT_SEL(m, "%d\n", reason == RTW_MAC_WOW_RX_PATTERN_PKT ? pattern_idx : -1);
 
 	return 0;
 }

@@ -226,8 +226,9 @@ static void _rtw_ssmps(_adapter *adapter, struct sta_info *sta)
 	struct mlme_ext_priv *pmlmeext = &(adapter->mlmeextpriv);
 	struct mlme_ext_info *pmlmeinfo = &(pmlmeext->mlmext_info);
 
-	issue_action_SM_PS_wait_ack(adapter , sta->phl_sta->mac_addr,
-			sta->phl_sta->asoc_cap.sm_ps, 3, 1);
+	if (!check_fwstate(&adapter->mlmepriv, WIFI_AP_STATE))
+		issue_action_SM_PS_wait_ack(adapter , sta->phl_sta->mac_addr,
+		    sta->phl_sta->asoc_cap.sm_ps, 3, 1);
 
 	if (sta->phl_sta->asoc_cap.sm_ps == SM_PS_STATIC) {
 		pmlmeext->txss_bk = sta->phl_sta->asoc_cap.nss_rx;
@@ -246,23 +247,68 @@ static void _rtw_ssmps(_adapter *adapter, struct sta_info *sta)
 
 void rtw_ssmps_enter(_adapter *adapter, struct sta_info *sta)
 {
-	if (sta->phl_sta->asoc_cap.sm_ps == SM_PS_STATIC)
+	RTW_INFO(ADPT_FMT" STA [" MAC_FMT "] enter from %d to %d\n", ADPT_ARG(adapter),
+		MAC_ARG(sta->phl_sta->mac_addr), sta->phl_sta->asoc_cap.sm_ps,
+		sta->smps_mode);
+
+	if (sta->smps_mode == SM_PS_DISABLE) {
+		RTW_WARN("%s: invalid mode\n", __func__);
 		return;
+	}
 
-	RTW_INFO(ADPT_FMT" STA [" MAC_FMT "]\n", ADPT_ARG(adapter), MAC_ARG(sta->phl_sta->mac_addr));
-
-	sta->phl_sta->asoc_cap.sm_ps = SM_PS_STATIC;
-	_rtw_ssmps(adapter, sta);
+	switch (sta->phl_sta->asoc_cap.sm_ps) {
+	case SM_PS_DISABLE:
+		if (sta->smps_mode == SM_PS_STATIC) {
+			sta->phl_sta->asoc_cap.sm_ps = SM_PS_STATIC;
+			_rtw_ssmps(adapter, sta);
+		} else if (sta->smps_mode == SM_PS_DYNAMIC &&
+			   check_fwstate(&adapter->mlmepriv, WIFI_AP_STATE)) {
+			sta->phl_sta->asoc_cap.sm_ps = SM_PS_DYNAMIC;
+			sta->rtsen = 1;
+		}
+		break;
+	case SM_PS_STATIC:
+		if (sta->smps_mode == SM_PS_DYNAMIC &&
+		    check_fwstate(&adapter->mlmepriv, WIFI_AP_STATE)) {
+			sta->phl_sta->asoc_cap.sm_ps = SM_PS_DYNAMIC;
+			_rtw_ssmps(adapter, sta);
+			sta->rtsen = 1;
+		}
+		break;
+	case SM_PS_DYNAMIC:
+		if (sta->smps_mode == SM_PS_STATIC &&
+		    check_fwstate(&adapter->mlmepriv, WIFI_AP_STATE)) {
+			sta->phl_sta->asoc_cap.sm_ps = SM_PS_STATIC;
+			sta->rtsen = 0;
+			_rtw_ssmps(adapter, sta);
+		}
+		break;
+	}
 }
 
 void rtw_ssmps_leave(_adapter *adapter, struct sta_info *sta)
 {
-	if (sta->phl_sta->asoc_cap.sm_ps == SM_PS_DISABLE)
-		return;
+	RTW_INFO(ADPT_FMT" STA [" MAC_FMT "] leave from %d to %d\n", ADPT_ARG(adapter),
+		MAC_ARG(sta->phl_sta->mac_addr), sta->phl_sta->asoc_cap.sm_ps,
+		sta->smps_mode);
 
-	RTW_INFO(ADPT_FMT" STA [" MAC_FMT "] \n", ADPT_ARG(adapter), MAC_ARG(sta->phl_sta->mac_addr));
-	sta->phl_sta->asoc_cap.sm_ps = SM_PS_DISABLE;
-	_rtw_ssmps(adapter, sta);
+	if (sta->smps_mode != SM_PS_DISABLE) {
+		RTW_WARN("%s: invalid mode %d\n", __func__, sta->smps_mode);
+		return;
+	}
+
+	switch (sta->phl_sta->asoc_cap.sm_ps) {
+	case SM_PS_STATIC:
+		sta->phl_sta->asoc_cap.sm_ps = SM_PS_DISABLE;
+		_rtw_ssmps(adapter, sta);
+		break;
+	case SM_PS_DYNAMIC:
+		if (check_fwstate(&adapter->mlmepriv, WIFI_AP_STATE)) {
+			sta->phl_sta->asoc_cap.sm_ps = SM_PS_DISABLE;
+			sta->rtsen = 0;
+		}
+		break;
+	}
 }
 
 void rtw_update_ips_setting(int make_level, int ins_level, u8 *mode, u8 *cap, bool is_wow)

@@ -6816,12 +6816,14 @@ static void fill_txreq_list_skb(_adapter *padapter,
 	struct sk_buff *head_skb, u32 req_sz, s32 offset)
 {
 	struct sk_buff *skb;
+	int skb_nr;
 
-	if (skb_total_frag_nr(head_skb) > NUM_PKT_LIST_PER_TXREQ - 2) {
+	skb_nr = skb_total_frag_nr(head_skb);
+	if (skb_nr > NUM_PKT_LIST_PER_TXREQ - 2) {
 #ifdef RTW_SKB_LINEARIZE
 		rtw_skb_linearize(head_skb);
 #endif
-		RTW_WARN_LMT("skb total frag nr over %d\n", NUM_PKT_LIST_PER_TXREQ - 2);
+		RTW_WARN_LMT("skb total frag nr (%d) over %d\n", skb_nr, NUM_PKT_LIST_PER_TXREQ - 2);
 	}
 
 	_fill_txreq_list_skb(padapter, txreq, pkt_list, head_skb, &req_sz, &offset);

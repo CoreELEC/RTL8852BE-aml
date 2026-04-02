@@ -2104,6 +2104,14 @@ _phl_chk_all_rlink_mstate(struct rtw_wifi_role_t *wrole, enum mlme_state mstate)
 
 	return ret;
 }
+
+bool phl_is_sta_linked(void *phl, struct rtw_phl_stainfo_t *sta)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
+
+	return rtw_hal_is_sta_linked(phl_info->hal, sta);
+}
+
 static enum rtw_phl_status
 phl_update_media_status(struct phl_info_t *phl_info, struct rtw_phl_stainfo_t *sta,
 			u8 *sta_addr, bool is_connect)

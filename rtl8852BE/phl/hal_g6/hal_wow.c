@@ -349,6 +349,13 @@ rtw_hal_wow_func_en(struct rtw_phl_com_t *phl_com, void *hal, u16 macid,
 				break;
 		}
 #endif
+
+		/* config wowlan csa */
+		if (cfg->wow_csa_cfg->en) {
+			hstatus = rtw_hal_mac_cfg_sta_csa(hal_info, macid, true, cfg->wow_csa_cfg);
+			if (RTW_HAL_STATUS_SUCCESS != hstatus)
+				break;
+		}
 	} while(0);
 
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] %s status(%u).\n", __func__, hstatus);
@@ -438,6 +445,12 @@ rtw_hal_wow_func_dis(struct rtw_phl_com_t *phl_com, void *hal, u16 macid,
 			PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] rtw_hal_mac_cfg_mdns_ofld failed \n");
 	}
 #endif
+	/* config wow csa */
+	if (cfg->wow_csa_cfg->en) {
+		hstatus = rtw_hal_mac_cfg_sta_csa(hal_info, macid, false, NULL);
+		if (RTW_HAL_STATUS_SUCCESS != hstatus)
+			PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] rtw_halmac_cfg_sta_csa failed \n");
+	}
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] %s status(%u).\n", __func__, hstatus);
 
 	FUNCOUT();

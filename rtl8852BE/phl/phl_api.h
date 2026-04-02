@@ -275,6 +275,8 @@ rtw_phl_cmd_change_stainfo(void *phl,
 	u8 *chg_info, u8 chg_info_len,
 	enum phl_cmd_type cmd_type, u32 cmd_timeout);
 
+bool phl_is_sta_linked(void *phl, struct rtw_phl_stainfo_t *sta);
+
 enum rtw_phl_status
 rtw_phl_cmd_update_media_status(void *phl,
                                 struct rtw_phl_stainfo_t *sta,

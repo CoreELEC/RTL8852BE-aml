@@ -5549,6 +5549,7 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	RTW_PROC_HDL_SSEQ("wow_wakeup_event", proc_get_wakeup_event,
 			  proc_set_wakeup_event),
 	RTW_PROC_HDL_SSEQ("wowlan_last_wake_reason", proc_get_wakeup_reason, NULL),
+	RTW_PROC_HDL_SSEQ("wow_wakeup_pattern_idx", proc_get_wakeup_pattern_idx, NULL),
 	RTW_PROC_HDL_SSEQ("wow_pattern_cam", proc_dump_pattern_cam, NULL),
 	RTW_PROC_HDL_SSEQ("wow_wake_indication", proc_get_wake_indication, NULL),
 #ifdef CONFIG_GPIO_WAKEUP

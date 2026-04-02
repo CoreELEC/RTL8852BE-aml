@@ -2012,7 +2012,7 @@ int rtw_check_beacon_data(_adapter *padapter, u8 *pbuf,  int len)
 	int group_cipher, pairwise_cipher, gmcs;
 	u32 akm;
 	u8 mfp_opt = MFP_NO;
-	u8 channel = 0, network_type;
+	u8 network_type;
 	u8 OUI1[] = {0x00, 0x50, 0xf2, 0x01};
 	u8 WMM_PARA_IE[] = {0x00, 0x50, 0xf2, 0x02, 0x01, 0x01};
 	u8 WIFI_ALLIANCE_OUI[] = {0x50, 0x6f, 0x9a};
@@ -2030,7 +2030,6 @@ int rtw_check_beacon_data(_adapter *padapter, u8 *pbuf,  int len)
 	struct link_mlme_ext_info	*pmlmeinfo = &(pmlmeext->mlmext_info);
 	struct rf_ctl_t *rfctl = adapter_to_rfctl(padapter);
 	struct rtw_chan_def chandef = {0};
-	enum band_type band = BAND_ON_24G;
 	u8 rf_num = 0;
 	int ret_rm;
 	/* SSID */
@@ -2113,14 +2112,15 @@ int rtw_check_beacon_data(_adapter *padapter, u8 *pbuf,  int len)
 		, pbss_network->IELength, _BEACON_IE_OFFSET_);
 
 	/* channel and band */
-	rtw_ies_get_bchbw(ie + _BEACON_IE_OFFSET_, pbss_network->IELength - _BEACON_IE_OFFSET_,
-		&chandef.band, &chandef.chan, (u8 *)&chandef.bw, (u8 *)&chandef.offset,
-		(u8 *)&chandef.center_freq1, (u8 *)&chandef.center_freq2, 1, 1, 1);
-
+	rtw_ies_get_chdef(ie + _BEACON_IE_OFFSET_, pbss_network->IELength - _BEACON_IE_OFFSET_, &chandef, 1, 1, 1, 1);
 	if (chandef.chan != 0) {
-		pbss_network->Configuration.Band = band = chandef.band;
-		pbss_network->Configuration.DSConfig = channel = chandef.chan;
-	}
+		pbss_network->Configuration.Band = chandef.band;
+		pbss_network->Configuration.DSConfig = chandef.chan;
+	} else if (pbss_network->Configuration.DSConfig != 0) {
+		chandef.band = pbss_network->Configuration.Band;
+		chandef.chan = pbss_network->Configuration.DSConfig;
+	} else
+		rtw_warn_on(1);
 
 	if (pbss_network->Configuration.Band == BAND_ON_6G)
 		/* DSSET uses in 2.4G and 5G band; Remove DSSET when using 6G band */
@@ -2458,15 +2458,8 @@ int rtw_check_beacon_data(_adapter *padapter, u8 *pbuf,  int len)
 
 		/* parsing HT_INFO_IE */
 		p = rtw_get_ie(ie + _BEACON_IE_OFFSET_, _HT_ADD_INFO_IE_, &ie_len, (pbss_network->IELength - _BEACON_IE_OFFSET_));
-		if (p && ie_len > 0) {
+		if (p && ie_len > 0)
 			pHT_info_ie = p;
-			if (channel == 0)
-				pbss_network->Configuration.DSConfig = GET_HT_OP_ELE_PRI_CHL(pHT_info_ie + 2);
-			else if (channel != GET_HT_OP_ELE_PRI_CHL(pHT_info_ie + 2)) {
-				RTW_INFO(FUNC_ADPT_FMT" ch inconsistent, DSSS:%u, HT primary:%u\n"
-					, FUNC_ADPT_ARG(padapter), channel, GET_HT_OP_ELE_PRI_CHL(pHT_info_ie + 2));
-			}
-		}
 	}
 #endif /* CONFIG_80211N_HT */
 	pmlmepriv->cur_network.network_type = network_type;
@@ -2544,9 +2537,9 @@ int rtw_check_beacon_data(_adapter *padapter, u8 *pbuf,  int len)
 	if (REGSTY_IS_11AX_ENABLE(pregistrypriv)
 		&& is_supported_he(pregistrypriv->wireless_mode)
 		&& RFCTL_REG_EN_11AX(rfctl)
-		&& ((band == BAND_ON_5G && pmlmepriv->vhtpriv.vht_option == _TRUE)
-		|| (band == BAND_ON_24G && pmlmepriv->htpriv.ht_option == _TRUE)
-		|| (band == BAND_ON_6G))) {
+		&& ((chandef.band == BAND_ON_5G && pmlmepriv->vhtpriv.vht_option == _TRUE)
+		|| (chandef.band == BAND_ON_24G && pmlmepriv->htpriv.ht_option == _TRUE)
+		|| (chandef.band == BAND_ON_6G))) {
 		u8 he_cap = _FALSE;
 		u8 he_cap_eid_ext = WLAN_EID_EXTENSION_HE_CAPABILITY;
 
@@ -2566,7 +2559,7 @@ int rtw_check_beacon_data(_adapter *padapter, u8 *pbuf,  int len)
 			rtw_update_he_ies(padapter, padapter_link, pbss_network, &chandef);
 		} else if (REGSTY_IS_11AX_AUTO(pregistrypriv)) {
 			rtw_he_ies_detach(padapter, padapter_link, pbss_network);
-			rtw_he_ies_attach(padapter, padapter_link, pbss_network, band);
+			rtw_he_ies_attach(padapter, padapter_link, pbss_network, chandef.band);
 		}
 	}
 	if (pmlmepriv->hepriv.he_option == _FALSE)
@@ -2653,15 +2646,7 @@ int rtw_check_beacon_data(_adapter *padapter, u8 *pbuf,  int len)
 
 	pbss_network->Length = get_WLAN_BSSID_EX_sz((WLAN_BSSID_EX *)pbss_network);
 
-	rtw_ies_get_bchbw(pbss_network->IEs + _BEACON_IE_OFFSET_,
-		pbss_network->IELength - _BEACON_IE_OFFSET_,
-		&pmlmepriv->ori_chandef.band,
-		&pmlmepriv->ori_chandef.chan,
-		(u8 *)&pmlmepriv->ori_chandef.bw,
-		(u8 *)&pmlmepriv->ori_chandef.offset,
-		(u8 *)&pmlmepriv->ori_chandef.center_freq1,
-		(u8 *)&pmlmepriv->ori_chandef.center_freq2,
-		1, 1, 1);
+	rtw_bss_get_chdef(pbss_network, &pmlmepriv->ori_chandef, 1, 1, 1, 1);
 
 	rtw_warn_on(pmlmepriv->ori_chandef.chan == 0);
 
@@ -3639,8 +3624,10 @@ void rtw_process_ht_action_smps(_adapter *padapter, u8 *ta, u8 ctrl_field)
 	struct sta_priv *pstapriv = &padapter->stapriv;
 
 	psta = rtw_get_stainfo(pstapriv, ta);
-	if (psta == NULL)
+	if (psta == NULL) {
+		RTW_INFO("%s: sta is null\n", __func__);
 		return;
+	}
 
 	e_field = (ctrl_field & BIT(0)) ? 1 : 0; /*SM Power Save Enabled*/
 	m_field = (ctrl_field & BIT(1)) ? 1 : 0; /*SM Mode, 0:static SMPS, 1:dynamic SMPS*/
@@ -3657,8 +3644,8 @@ void rtw_process_ht_action_smps(_adapter *padapter, u8 *ta, u8 ctrl_field)
 		psta->smps_mode = SM_PS_DISABLE;
 	}
 
-	if (psta->smps_mode != SM_PS_DYNAMIC)
-		rtw_ssmps_wk_cmd(padapter, psta, e_field, 1);
+	RTW_INFO("%s: enable=%d, dynamic=%d\n", __func__, e_field, m_field);
+	rtw_ssmps_wk_cmd(padapter, psta, e_field, 1);
 }
 
 /*
@@ -4890,8 +4877,6 @@ u8 rtw_ap_bchbw_decision(_adapter *adapter, u8 ifbmp, u8 excl_ifbmp, s8 req_band
 	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
 	bool ch_avail = _FALSE;
 	enum band_type cur_ie_band[CONFIG_IFACE_NUMBER] = {BAND_ON_24G};
-	u8 cur_ie_freq0[CONFIG_IFACE_NUMBER] = {0};
-	u8 cur_ie_freq1[CONFIG_IFACE_NUMBER] = {0};
 	u8 cur_ie_ch[CONFIG_IFACE_NUMBER] = {0};
 	u8 cur_ie_bw[CONFIG_IFACE_NUMBER] = {0};
 	u8 cur_ie_offset[CONFIG_IFACE_NUMBER] = {0};
@@ -4950,9 +4935,8 @@ u8 rtw_ap_bchbw_decision(_adapter *adapter, u8 ifbmp, u8 excl_ifbmp, s8 req_band
 		network = &(mlmeext->mlmext_info.network);
 
 		/* get current IE channel settings */
-		rtw_ies_get_bchbw(BSS_EX_TLV_IES(network), BSS_EX_TLV_IES_LEN(network)
-			, &cur_ie_band[i] , &cur_ie_ch[i] , &cur_ie_bw[i]
-			, &cur_ie_offset[i], &cur_ie_freq0[i], &cur_ie_freq1[i], 1, 1, 1);
+		rtw_bss_get_bchbw(network, &cur_ie_band[i], &cur_ie_ch[i]
+			, &cur_ie_bw[i], &cur_ie_offset[i], 1, 1, 1, 1);
 
 		/* prepare temporary channel setting decision */
 		if (req_ch == 0) {

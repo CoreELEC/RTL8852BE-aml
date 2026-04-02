@@ -17,26 +17,12 @@ s5
 Change-Id: I83b9f3b998c2c72d222f8f661925574e2211b14a
 Signed-off-by: jiabin.chen <jiabin.chen@amlogic.com>
 ---
- rtl8852BE/Makefile                      |  2 +-
  rtl8852BE/os_dep/linux/ioctl_cfg80211.c | 88 +++++++++++++++++++------
  rtl8852BE/os_dep/osdep_service_linux.c  |  2 +-
  rtl8852BE/phl/hal_g6/mac/mac_ax/fwdl.c  |  6 +-
  rtl8852BE/phl/hal_g6/mac/mac_ax/fwdl.h  |  2 +-
  5 files changed, 75 insertions(+), 25 deletions(-)
 
-diff --git a/rtl8852BE/Makefile b/rtl8852BE/Makefile
-index e1aba20..7233b81 100644
---- a/rtl8852BE/Makefile
-+++ b/rtl8852BE/Makefile
-@@ -162,7 +162,7 @@ CONFIG_RTW_DEBUG = y
- # default log level is _DRV_INFO_ = 4,
- # please refer to "How_to_set_driver_debug_log_level.doc" to set the available level.
- CONFIG_RTW_LOG_LEVEL = 3
--CONFIG_RTW_PHL_LOG_LEVEL = 3
-+CONFIG_RTW_PHL_LOG_LEVEL = 0
- 
- # CONFIG_RTW_APPEND_LOGLEVEL decide if append kernel log level to each messages.
- # default "n" for don't append.
 diff --git a/rtl8852BE/os_dep/linux/ioctl_cfg80211.c b/rtl8852BE/os_dep/linux/ioctl_cfg80211.c
 index 412b228..6f60609 100755
 --- a/rtl8852BE/os_dep/linux/ioctl_cfg80211.c

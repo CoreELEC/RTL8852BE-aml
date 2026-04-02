@@ -478,8 +478,12 @@ struct rtw_phl_evt_ops {
 	enum rtw_phl_status (*tx_recycle)(void *drv_priv, struct rtw_xmit_req *txreq);
 	enum rtw_phl_status (*tx_test_recycle)(void *phl, struct rtw_xmit_req *txreq);
 	bool (*set_rf_state)(void *drv_priv, enum rtw_rf_state state_to_set);
-	void (*wow_handle_sec_info_update)(void *drv_priv, struct rtw_aoac_report *aoac_info, u8 aoac_report_get_ok, u8 phase);
+	void (*wow_handle_sec_info_update)(void *drv_priv, struct rtw_aoac_report *aoac_info, u8 sec_chk_ok, u8 phase);
+	void (*wow_handle_csa)(void *drv_priv, struct rtw_wifi_role_t *wrole,
+			       struct rtw_wifi_role_link_t *rlink,
+			       struct rtw_chan_def chdef);
 	void (*indicate_wake_rsn)(void *drv_priv, u8 rsn);
+	void (*indicate_wake_pattern_idx)(void *drv_priv, u8 pattern_idx);
 #ifdef CONFIG_SYNC_INTERRUPT
 	void (*interrupt_restore)(void *drv_priv, u8 rx);
 	void (*set_interrupt_caps)(void *drv_priv, u8 en);

@@ -58,6 +58,7 @@ void rtw_init_wow(_adapter *padapter)
 	pwrctrlpriv->wowlan_in_resume = _FALSE;
 
 	wowpriv->wow_wake_reason = 0;
+	wowpriv->wowlan_aoac_rpt.wow_pattern_idx = -1; /*avoid confusion with idx 0*/
 
 #ifdef CONFIG_GPIO_WAKEUP
 #ifdef PRIVATE_R
@@ -614,6 +615,14 @@ void rtw_core_wow_handle_wake_up_rsn(void *drv_priv, u8 rsn)
 	struct wow_priv *wowpriv = dvobj_to_wowlan(dvobj);
 
 	wowpriv->wow_wake_reason = rsn;
+}
+
+void rtw_core_wow_handle_wake_up_pattern_idx(void *drv_priv, u8 pattern_idx)
+{
+	struct dvobj_priv *dvobj = (struct dvobj_priv *)drv_priv;
+	struct wow_priv *wowpriv = dvobj_to_wowlan(dvobj);
+
+	wowpriv->wowlan_aoac_rpt.wow_pattern_idx = pattern_idx;
 }
 
 #ifdef CONFIG_MDNS_OFFLOAD

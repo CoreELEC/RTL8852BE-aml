@@ -1497,6 +1497,7 @@ static void rtw_core_set_phl_ops(struct dvobj_priv *dvobj)
 	evt_ops->tx_recycle = rtw_core_tx_recycle;
 #ifdef CONFIG_WOWLAN
 	evt_ops->indicate_wake_rsn = rtw_core_wow_handle_wake_up_rsn;
+	evt_ops->indicate_wake_pattern_idx = rtw_core_wow_handle_wake_up_pattern_idx;
 #ifdef CONFIG_GTK_OL
 	evt_ops->wow_handle_sec_info_update = rtw_update_gtk_ofld_info;
 #endif

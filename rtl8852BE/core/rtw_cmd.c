@@ -1505,23 +1505,45 @@ exit:
 	return res;
 }
 
+u8 __rtw_ssmps_wk_cmd(_adapter *adapter, struct sta_info *sta, u8 smps, u8 enqueue, u8 retry_cnt);
+
 u8 rtw_ssmps_wk_hdl(_adapter *adapter, struct ssmps_cmd_parm *ssmp_param)
 {
 	u8 res = _SUCCESS;
 	struct sta_info *sta = ssmp_param->sta;
 	u8 smps = ssmp_param->smps;
 
-	if (sta == NULL)
+	if (sta == NULL) {
+		RTW_WARN("%s: sta is NULL\n", __func__);
 		return _FALSE;
+	}
+
+	if (sta->phl_sta == NULL) {
+		RTW_WARN("%s: phl_sta is NULL\n", __func__);
+		return _FALSE;
+	}
+
+	if (!phl_is_sta_linked(GET_PHL_INFO(adapter_to_dvobj(adapter)), sta->phl_sta)) {
+		if (ssmp_param->retry_cnt < 2) {
+			RTW_WARN("%s: phl_sta is not linked, retry=%d\n", __func__, ssmp_param->retry_cnt);
+			__rtw_ssmps_wk_cmd(adapter, sta, smps, 1, ssmp_param->retry_cnt + 1);
+		}
+		else {
+			RTW_WARN("%s: phl_sta is not linked\n", __func__);
+		}
+
+		return _FALSE;
+	}
 
 	if (smps)
 		rtw_ssmps_enter(adapter, sta);
 	else
 		rtw_ssmps_leave(adapter, sta);
+
 	return res;
 }
 
-u8 rtw_ssmps_wk_cmd(_adapter *adapter, struct sta_info *sta, u8 smps, u8 enqueue)
+u8 __rtw_ssmps_wk_cmd(_adapter *adapter, struct sta_info *sta, u8 smps, u8 enqueue, u8 retry_cnt)
 {
 	struct cmd_obj *cmdobj;
 	struct drvextra_cmd_parm *cmd_parm;
@@ -1554,6 +1576,7 @@ u8 rtw_ssmps_wk_cmd(_adapter *adapter, struct sta_info *sta, u8 smps, u8 enqueue
 
 		ssmp_param->smps = smps;
 		ssmp_param->sta = sta;
+		ssmp_param->retry_cnt = retry_cnt;
 
 		cmd_parm->ec_id = SSMPS_WK_CID;
 		cmd_parm->type = 0;
@@ -1573,6 +1596,11 @@ u8 rtw_ssmps_wk_cmd(_adapter *adapter, struct sta_info *sta, u8 smps, u8 enqueue
 
 exit:
 	return res;
+}
+
+u8 rtw_ssmps_wk_cmd(_adapter *adapter, struct sta_info *sta, u8 smps, u8 enqueue)
+{
+	return __rtw_ssmps_wk_cmd(adapter, sta, smps, enqueue, 0);
 }
 
 #ifdef CONFIG_SUPPORT_STATIC_SMPS

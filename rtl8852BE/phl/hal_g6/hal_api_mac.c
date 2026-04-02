@@ -4292,32 +4292,6 @@ static u32 _hal_mac_recv_aoac_report(struct mac_ax_adapter *mac, struct mac_ax_a
 	return mac_status;
 }
 
-#define KEY_ID_MASK 0x3
-#define KEY_ID_OFFSET 6
-
-enum rtw_hal_status _hal_mac_aoac_rpt_chk(struct rtw_aoac_report *aoac_info)
-{
-	u8 key_id_from_iv = 0;
-	u32 rx_iv = *((u32 *)aoac_info->ptk_rx_iv);
-
-	/* Case I. Aoac report is all zero in phase 0 */
-	if (rx_iv == 0) {
-		PHL_TRACE(COMP_PHL_WOW, _PHL_WARNING_, "%s(): ptk_rx_iv is Zero, treating this case as error.\n", __func__);
-		return RTW_HAL_STATUS_FAILURE;
-	}
-
-	/* Case II. KEY_IDX does not match with GTK_RX_IV */
-	key_id_from_iv = (aoac_info->gtk_rx_iv[aoac_info->key_idx][3] >> KEY_ID_OFFSET) & KEY_ID_MASK;
-
-	if (key_id_from_iv != aoac_info->key_idx) {
-		PHL_TRACE(COMP_PHL_WOW, _PHL_WARNING_, "%s(): Key_idx(%u) not match with the one(%u) parsed from GTK_RX_IV[%u]\n",
-						__func__, aoac_info->key_idx, key_id_from_iv, aoac_info->key_idx);
-		return RTW_HAL_STATUS_FAILURE;
-	}
-
-	return RTW_HAL_STATUS_SUCCESS;
-}
-
 /*
 AOAC_RPT - PHASE 0:
 	Halmac will get aoac report through c2h reg.
@@ -4332,7 +4306,7 @@ AOAC_RPT - PHASE 0:
 enum rtw_hal_status
 _hal_mac_read_aoac_rpt_phase_0(void* drv_priv, struct mac_ax_aoac_report *aoac_rpt_buf, struct rtw_aoac_report *aoac_info)
 {
-	enum rtw_hal_status hal_status = RTW_HAL_STATUS_FAILURE;
+	enum rtw_hal_status hal_status = RTW_HAL_STATUS_SUCCESS;
 
 	aoac_info->rekey_ok = aoac_rpt_buf->rekey_ok;
 	aoac_info->key_idx = aoac_rpt_buf->key_idx;
@@ -4358,7 +4332,11 @@ _hal_mac_read_aoac_rpt_phase_0(void* drv_priv, struct mac_ax_aoac_report *aoac_r
 
 	_os_mem_cpy(drv_priv, aoac_info->igtk_ipn, aoac_rpt_buf->igtk_ipn, sizeof(aoac_rpt_buf->igtk_ipn));
 
-	hal_status = _hal_mac_aoac_rpt_chk(aoac_info);
+	aoac_info->csa_pri_ch = aoac_rpt_buf->csa_pri_ch;
+	aoac_info->csa_bw = aoac_rpt_buf->csa_bw;
+	aoac_info->csa_ch_offset = aoac_rpt_buf->csa_ch_offset;
+	aoac_info->csa_chsw_failed = aoac_rpt_buf->csa_chsw_failed;
+	aoac_info->csa_ch_band = aoac_rpt_buf->csa_ch_band;
 
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "PHASE 0:\n");
 
@@ -4374,6 +4352,12 @@ _hal_mac_read_aoac_rpt_phase_0(void* drv_priv, struct mac_ax_aoac_report *aoac_r
 
 	if (aoac_info->rekey_ok)
 		PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-     igtk_ipn = 0x%08x%08x\n", *((u32*)(aoac_info->igtk_ipn)+1), *((u32*)(aoac_info->igtk_ipn)));
+
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-           csa_pri_ch = %u\n", aoac_info->csa_pri_ch);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-               csa_bw = %u\n", aoac_info->csa_bw);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-        csa_ch_offset = %u\n", aoac_info->csa_ch_offset);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-      csa_chsw_failed = %u\n", aoac_info->csa_chsw_failed);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-          csa_ch_band = %u\n", aoac_info->csa_ch_band);
 
 	return hal_status;
 }
@@ -4426,6 +4410,11 @@ _hal_mac_read_aoac_rpt_phase_1(void* drv_priv, struct mac_ax_aoac_report *aoac_r
 	_os_mem_cpy(drv_priv, aoac_info->igtk_key_id, aoac_rpt_buf->igtk_key_id, sizeof(aoac_rpt_buf->igtk_key_id));
 	_os_mem_cpy(drv_priv, aoac_info->igtk_ipn, aoac_rpt_buf->igtk_ipn, sizeof(aoac_rpt_buf->igtk_ipn));
 	_os_mem_cpy(drv_priv, aoac_info->igtk, aoac_rpt_buf->igtk, sizeof(aoac_rpt_buf->igtk));
+	aoac_info->csa_pri_ch = aoac_rpt_buf->csa_pri_ch;
+	aoac_info->csa_bw = aoac_rpt_buf->csa_bw;
+	aoac_info->csa_ch_offset = aoac_rpt_buf->csa_ch_offset;
+	aoac_info->csa_chsw_failed = aoac_rpt_buf->csa_chsw_failed;
+	aoac_info->csa_ch_band = aoac_rpt_buf->csa_ch_band;
 
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "PHASE 1:\n");
 
@@ -4449,6 +4438,12 @@ _hal_mac_read_aoac_rpt_phase_1(void* drv_priv, struct mac_ax_aoac_report *aoac_r
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-             igtk_ipn = 0x%08x%08x\n", *((u32*)(aoac_info->igtk_ipn)+1), *((u32*)(aoac_info->igtk_ipn)));
 	debug_dump_data(aoac_info->gtk, sizeof(aoac_rpt_buf->gtk), "GTK:");
 	debug_dump_data(aoac_info->igtk, sizeof(aoac_rpt_buf->igtk), "iGTK:");
+
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-           csa_pri_ch = %u\n", aoac_info->csa_pri_ch);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-               csa_bw = %u\n", aoac_info->csa_bw);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-        csa_ch_offset = %u\n", aoac_info->csa_ch_offset);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-      csa_chsw_failed = %u\n", aoac_info->csa_chsw_failed);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "-          csa_ch_band = %u\n", aoac_info->csa_ch_band);
 
 	return hal_status;
 }
@@ -4969,6 +4964,51 @@ exit:
 	return hstatus;
 }
 #endif /* CONFIG_PHL_APF */
+
+enum rtw_hal_status
+rtw_hal_mac_cfg_sta_csa(struct hal_info_t *hal, u16 macid, u8 en,
+			struct rtw_hal_mac_sta_csa *cfg)
+{
+	struct mac_ax_adapter *mac = hal_to_mac(hal);
+	enum rtw_hal_status hsts = RTW_HAL_STATUS_FAILURE;
+	u16 loop_cnt = 0;
+	int i = 0;
+	u8 fw_ret;
+
+	if (en) {
+		cfg->macid = macid;
+		PHL_INFO("%s : en = %u \n", __func__, cfg->en);
+		PHL_INFO("%s : macid = %u \n", __func__, cfg->macid);
+		PHL_INFO("%s : max_ap_gone_time = %u \n", __func__,
+			 cfg->max_ap_gone_time);
+		PHL_INFO("%s : num_supported_ch = %u \n", __func__,
+			 cfg->num_supported_ch);
+		for (i = 0; i < cfg->num_supported_ch; i++) {
+			PHL_INFO("%s : chlist[%u]: pri_ch/supported_bw/ch_band = %u/%u/%u \n",
+				 __func__, i, cfg->chlist[i].pri_ch,
+				 cfg->chlist[i].supported_bw,
+				 cfg->chlist[i].ch_band);
+		}
+		if (mac->ops->cfg_sta_csa(mac, cfg) != MACSUCCESS)
+			return hsts;
+	} else {
+		return RTW_HAL_STATUS_SUCCESS;
+	}
+
+	do {
+		if (mac->ops->check_sta_csa_cfg(mac, &fw_ret) == MACSUCCESS) {
+			hsts = RTW_HAL_STATUS_SUCCESS;
+			break;
+		}
+		_os_sleep_ms(hal_to_drvpriv(hal), POLLING_HALMAC_TIME);
+		loop_cnt++;
+	} while (loop_cnt < POLLING_HALMAC_CNT);
+
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "%s(): timeout=%u, fw_ret=%u\n",
+		  __func__, (loop_cnt < POLLING_HALMAC_CNT ? 0 : 1), fw_ret);
+
+	return hsts;
+}
 #endif /* CONFIG_WOWLAN */
 
 #define MAX_POLLING_FW_STS_TIME 100 /* ms */

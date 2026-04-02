@@ -480,6 +480,16 @@ void rtw_phl_cfg_mdns_ofld_info(void *phl, struct rtw_mdns_ofld_info *info)
 
 }
 #endif
+void rtw_phl_cfg_wow_csa_info(void *phl, struct rtw_hal_mac_sta_csa *info)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
+	struct phl_wow_info *wow_info = phl_to_wow_info(phl_info);
+
+	wow_info->wow_csa_info = *info;
+
+	if (wow_info->wow_csa_info.chlist == NULL)
+		wow_info->wow_csa_info.en = _FALSE;
+}
 
 void rtw_phl_cfg_arp_ofld_info(void *phl, struct rtw_arp_ofld_info *info)
 {
@@ -808,6 +818,26 @@ enum rtw_phl_status rtw_phl_remove_wow_ptrn_info(void *phl, u8 wowcam_id)
 		PHL_TRACE(COMP_PHL_WOW, _PHL_WARNING_, "[wow] %s(): Invalid wowcam id(%u), Fail.\n",
 						__func__, wowcam_id);
 		phl_status = RTW_PHL_STATUS_FAILURE;
+	}
+
+	return phl_status;
+}
+
+enum rtw_phl_status rtw_phl_get_wow_ptrn_info(void *phl, struct rtw_wowcam_upd_info *info, u8 wowcam_id)
+{
+	enum rtw_phl_status phl_status = RTW_PHL_STATUS_FAILURE;
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
+	struct phl_wow_info *wow_info = phl_to_wow_info(phl_info);
+	struct rtw_pattern_match_info *pattern_match_info = &wow_info->pattern_match_info;
+	struct rtw_wowcam_upd_info wowcam_info = pattern_match_info->wowcam_info[wowcam_id];
+	void *d = phl_to_drvpriv(phl_info);
+
+	if (wowcam_info.valid == 0)
+		phl_status = RTW_PHL_STATUS_INVALID_PARAM;
+	else {
+		_os_mem_set(d, info, 0, sizeof(struct rtw_wowcam_upd_info));
+		_os_mem_cpy(d, info, &wowcam_info, sizeof(struct rtw_wowcam_upd_info));
+		phl_status = RTW_PHL_STATUS_SUCCESS;
 	}
 
 	return phl_status;
@@ -1447,48 +1477,126 @@ enum rtw_phl_status phl_wow_deinit(struct phl_wow_info *wow_info)
 	return pstatus;
 }
 
-static void _phl_indic_wake_sec_upd(struct phl_wow_info *wow_info, u8 aoac_report_get_ok, u8 rx_ready)
+static void _phl_indic_wake_sec_upd(struct phl_wow_info *wow_info, u8 sec_chk_ok, u8 rx_ready)
 {
 	struct phl_info_t *phl_info = wow_info->phl_info;
 	struct rtw_phl_evt_ops *ops = &phl_info->phl_com->evt_ops;
 	void *drv_priv = phl_to_drvpriv(phl_info);
 
 	if (NULL != ops->wow_handle_sec_info_update)
-		ops->wow_handle_sec_info_update(drv_priv, &wow_info->aoac_info, aoac_report_get_ok, rx_ready);
+		ops->wow_handle_sec_info_update(drv_priv, &wow_info->aoac_info, sec_chk_ok, rx_ready);
 	else
 		PHL_TRACE(COMP_PHL_WOW, _PHL_ERR_, "[wow] %s : evt_ops->wow_handle_sec_info_update is NULL.\n"
 			, __func__);
 }
 
+static void _phl_wow_handle_csa(struct phl_wow_info *wow_info)
+{
+	struct rtw_aoac_report *aoac_report = &wow_info->aoac_info;
+	struct phl_info_t *phl_info = wow_info->phl_info;
+	struct rtw_phl_evt_ops *evt_ops = &(phl_info->phl_com->evt_ops);
+	struct rtw_chan_def chdef = {0};
+
+	if (evt_ops->wow_handle_csa == NULL)
+		return;
+
+	chdef.band = aoac_report->csa_ch_band;
+	chdef.chan = aoac_report->csa_pri_ch;
+	chdef.bw = aoac_report->csa_bw;
+	chdef.offset = aoac_report->csa_ch_offset;
+
+	if (aoac_report->csa_pri_ch) {
+		enum rtw_hal_status hsts;
+
+		evt_ops->wow_handle_csa(phl_to_drvpriv(phl_info),
+					wow_info->sta->wrole,
+					wow_info->sta->rlink, chdef);
+		hsts = rtw_hal_set_ch_bw(phl_info->hal, wow_info->sta->rlink->hw_band,
+					 &chdef, _TRUE, _FALSE, _TRUE);
+		if (hsts != RTW_HAL_STATUS_SUCCESS)
+			PHL_TRACE(COMP_PHL_WOW, _PHL_ERR_, "[wow] %s : csa set chbw failed!\n", __func__);
+	}
+}
+
+static void _phl_indic_wake_pattern_idx(struct phl_wow_info *wow_info)
+{
+	struct phl_info_t *phl_info = wow_info->phl_info;
+	struct rtw_phl_evt_ops *evt_ops = &(phl_info->phl_com->evt_ops);
+
+	if (NULL != evt_ops->indicate_wake_pattern_idx)
+		evt_ops->indicate_wake_pattern_idx(phl_to_drvpriv(phl_info), wow_info->aoac_info.pattern_idx);
+
+}
+
+#define KEY_ID_MASK 0x3
+#define KEY_ID_OFFSET 6
+
+enum rtw_phl_status _phl_aoac_rpt_rx_sec_chk(struct phl_wow_info *wow_info)
+{
+	struct rtw_aoac_report *aoac_info = &wow_info->aoac_info;
+	u8 key_id_from_iv = 0;
+	u32 rx_iv = *((u32 *)aoac_info->ptk_rx_iv);
+
+	if (!wow_info->wow_wake_info.pairwise_sec_algo) {
+		PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "%s(): Rx security parameter is useless since security is not used\n", __func__);
+		return RTW_PHL_STATUS_FAILURE;
+	}
+
+	/* Case I. Aoac report is all zero in phase 0 */
+	if (rx_iv == 0) {
+		PHL_TRACE(COMP_PHL_WOW, _PHL_WARNING_, "%s(): ptk_rx_iv is Zero, treating this case as error.\n", __func__);
+		return RTW_PHL_STATUS_FAILURE;
+	}
+
+	/* Case II. KEY_IDX does not match with GTK_RX_IV */
+	key_id_from_iv = (aoac_info->gtk_rx_iv[aoac_info->key_idx][3] >> KEY_ID_OFFSET) & KEY_ID_MASK;
+
+	if (key_id_from_iv != aoac_info->key_idx) {
+		PHL_TRACE(COMP_PHL_WOW, _PHL_WARNING_, "%s(): Key_idx(%u) not match with the one(%u) parsed from GTK_RX_IV[%u]\n",
+						__func__, aoac_info->key_idx, key_id_from_iv, aoac_info->key_idx);
+		return RTW_PHL_STATUS_FAILURE;
+	}
+
+	return RTW_PHL_STATUS_SUCCESS;
+}
+
+
 static enum rtw_hal_status _phl_handle_aoac_rpt_action(struct phl_wow_info *wow_info, bool rx_ready)
 {
 	struct phl_info_t *phl_info = wow_info->phl_info;
 	enum rtw_hal_status hstatus = RTW_HAL_STATUS_SUCCESS;
-	u8 aoac_report_get_ok = false;
+	enum rtw_phl_status pstatus = RTW_PHL_STATUS_FAILURE;
 	static u8 phase_0_ok = false;
+	static u8 phase_0_sec_chk_ok = false;
 
-	if (wow_info->wow_wake_info.pairwise_sec_algo) {
-		if (rx_ready == false) {
-			/* phase 0 */
-			hstatus = rtw_hal_get_wow_aoac_rpt(phl_info->hal, &wow_info->aoac_info, rx_ready);
-			aoac_report_get_ok = (hstatus == RTW_HAL_STATUS_SUCCESS) ? true : false;
-			_phl_indic_wake_sec_upd(wow_info, aoac_report_get_ok, rx_ready);
+	if (rx_ready == false) {
+		/* phase 0 */
+		hstatus = rtw_hal_get_wow_aoac_rpt(phl_info->hal,
+						   &wow_info->aoac_info,
+						   rx_ready);
+		if (hstatus == RTW_HAL_STATUS_SUCCESS) {
+			_phl_wow_handle_csa(wow_info);
 
-			phase_0_ok = aoac_report_get_ok;
+			pstatus = _phl_aoac_rpt_rx_sec_chk(wow_info);
+			phase_0_sec_chk_ok = (pstatus == RTW_PHL_STATUS_SUCCESS) ? true : false;
+			_phl_indic_wake_sec_upd(wow_info, phase_0_sec_chk_ok, rx_ready);
+			phase_0_ok = true;
 		}
-
-		if (rx_ready == true) {
-			/* phase 1 */
-			if (phase_0_ok) {
-				hstatus = rtw_hal_get_wow_aoac_rpt(phl_info->hal, &wow_info->aoac_info, rx_ready);
-				aoac_report_get_ok = (hstatus == RTW_HAL_STATUS_SUCCESS) ? true : false;
-				_phl_indic_wake_sec_upd(wow_info, aoac_report_get_ok, rx_ready);
+	} else {
+		/* phase 1 */
+		if (phase_0_ok) {
+			hstatus = rtw_hal_get_wow_aoac_rpt(phl_info->hal,
+							   &wow_info->aoac_info,
+							   rx_ready);
+			if (hstatus == RTW_HAL_STATUS_SUCCESS) {
+				_phl_indic_wake_pattern_idx(wow_info);
+				if (phase_0_sec_chk_ok)
+					_phl_indic_wake_sec_upd(wow_info, phase_0_sec_chk_ok, rx_ready);
 			}
-
-			phase_0_ok = false;
-
-			wow_info->aoac_info.rpt_fail = (aoac_report_get_ok == false) ? true : false;
 		}
+		wow_info->aoac_info.rpt_fail = (hstatus == RTW_HAL_STATUS_SUCCESS) ? true : false;
+		phase_0_ok = false;
+		phase_0_sec_chk_ok = false;
 	}
 
 	return hstatus;
@@ -2358,6 +2466,7 @@ enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info)
 #ifdef CONFIG_PHL_MDNS_OFFLOAD
 		cfg.mdns_ofld_info = wow_info->mdns_ofld_info;
 #endif
+		cfg.wow_csa_cfg = &wow_info->wow_csa_info;
 
 		hstatus = rtw_hal_wow_func_en(phl_info->phl_com, phl_info->hal, sta->macid, &cfg);
 		if (hstatus != RTW_HAL_STATUS_SUCCESS) {
@@ -2426,6 +2535,7 @@ enum rtw_phl_status phl_wow_func_dis(struct phl_wow_info *wow_info)
 #ifdef CONFIG_PHL_MDNS_OFFLOAD
 	cfg.mdns_ofld_info = wow_info->mdns_ofld_info;
 #endif
+	cfg.wow_csa_cfg = &wow_info->wow_csa_info;
 
 	hstatus = rtw_hal_wow_func_dis(phl_info->phl_com, phl_info->hal, sta->macid,
 	                               &cfg);

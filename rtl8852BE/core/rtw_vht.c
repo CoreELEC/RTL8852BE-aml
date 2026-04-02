@@ -1595,8 +1595,8 @@ void rtw_check_for_vht20(_adapter *adapter, u8 *ies, int ies_len)
 	u8 ht_ch, ht_bw, ht_offset;
 	u8 vht_ch, vht_bw, vht_offset;
 
-	rtw_ies_get_bchbw(ies, ies_len, NULL, &ht_ch, &ht_bw, &ht_offset, NULL, NULL, 1, 0, 0);
-	rtw_ies_get_bchbw(ies, ies_len, NULL, &vht_ch, &vht_bw, &vht_offset, NULL, NULL, 1, 1, 0);
+	rtw_ies_get_bchbw(ies, ies_len, NULL, &ht_ch, &ht_bw, &ht_offset, 1, 0, 0, 0);
+	rtw_ies_get_bchbw(ies, ies_len, NULL, &vht_ch, &vht_bw, &vht_offset, 1, 1, 0, 0);
 
 	if (ht_bw == CHANNEL_WIDTH_20 && vht_bw >= CHANNEL_WIDTH_80) {
 		u8 *vht_op_ie;

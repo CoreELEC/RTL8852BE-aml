@@ -15,7 +15,6 @@ EXTRA_CFLAGS += -Wno-unused-label
 EXTRA_CFLAGS += -Wno-unused
 #EXTRA_CFLAGS += -Wno-uninitialized
 
-
 ############ ANDROID COMMON KERNEL ############
 # clang
 ifeq ($(CC), clang)
@@ -300,50 +299,6 @@ src = .
 # USED FOR BUILD.bazel
 FILEGROUP_LIST = _PLATFORM_FILES _CORE_FILES _OS_INTFS_FILES _PHL_FILES _HAL_MAC_FILES _BTC_FILES _HAL_RF_FILES _HAL_FILES _HAL_IC_FILES _HAL_BB_FILES
 KERNEL_BUILD = //common:rtkstb
-DEP = //common:all_headers
-#TEXT_HDRS = core/regdb/rtw_regdb_rtk_common.c
-EXTRA_CFLAGS += -I./core/regdb
-
-# COMPILER OPTION
-EXTRA_CFLAGS += -Wno-uninitialized
-EXTRA_CFLAGS += -Wno-enum-conversion
-EXTRA_CFLAGS += -Wno-fortify-source
-EXTRA_CFLAGS += -Wno-invalid-source-encoding
-EXTRA_CFLAGS += -Wno-tautological-pointer-compare
-EXTRA_CFLAGS += -Wno-tautological-overlap-compare
-EXTRA_CFLAGS += -Wno-pointer-bool-conversion
-EXTRA_CFLAGS += -Wno-parentheses-equality
-EXTRA_CFLAGS += -Wno-self-assign
-EXTRA_CFLAGS += -Wno-header-guard
-EXTRA_CFLAGS += -Wno-implicit-fallthrough
-EXTRA_CFLAGS += -Wno-unused-but-set-parameter
-EXTRA_CFLAGS += -Wno-array-bounds
-EXTRA_CFLAGS += -Wno-undef
-endif
-endif
-
-########################## Android ###########################
-# CONFIG_RTW_ANDROID - 0: no Android, 10 - 16 : Android version
-CONFIG_RTW_ANDROID = 16
-
-ifeq ($(shell test $(CONFIG_RTW_ANDROID) -gt 0; echo $$?), 0)
-EXTRA_CFLAGS += -DCONFIG_RTW_ANDROID=$(CONFIG_RTW_ANDROID)
-CONFIG_GOOGLE_CAST_WAKEUP = n
-
-# For BAZEL BUILD
-CONFIG_GKI_BAZEL = n
-
-ifeq ($(CONFIG_GKI_BAZEL), y)
-# UNUSED DUMMY INFO
-KERNELRELEASE = GKI
-KVER  := $(shell uname -r)
-KSRC := /lib/modules/$(KVER)/build
-DRV_FOLDER = $(notdir $(shell pwd))
-src = .
-
-# USED FOR BUILD.bazel
-FILEGROUP_LIST = _PLATFORM_FILES _CORE_FILES _OS_INTFS_FILES _PHL_FILES _HAL_MAC_FILES _BTC_FILES _HAL_RF_FILES _HAL_FILES _HAL_IC_FILES _HAL_BB_FILES
-KERNEL_BUILD = //common:rtkstb_tv
 DEP = //common:all_headers
 #TEXT_HDRS = core/regdb/rtw_regdb_rtk_common.c
 EXTRA_CFLAGS += -I./core/regdb

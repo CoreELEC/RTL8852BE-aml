@@ -676,16 +676,21 @@ static int rtw_pci_suspend(struct pci_dev *pdev, pm_message_t state)
 		goto exit;
 	}
 
+	RTW_INFO("%s call pci_disable_device \n", __func__);
 	pci_disable_device(pdev);
 
 #ifdef CONFIG_WOWLAN
 	ret = pci_enable_wake(pdev, pci_choose_state(pdev, state), true);
+	RTW_INFO("%s call pci_enable_wake ret=%d\n", __func__, ret);
 	if (ret != 0)
 		RTW_INFO("%s Failed on pci_enable_wake (%d)\n", __func__, ret);
 #endif
+#if 0 //modify to avoid restart during resume
 	ret = pci_set_power_state(pdev, pci_choose_state(pdev, state));
+	RTW_INFO("%s call pci_set_power_state state=%d ret=%d\n", __func__, pci_choose_state(pdev, state), ret);
 	if (ret != 0)
 		RTW_INFO("%s Failed on pci_set_power_state (%d)\n", __func__, ret);
+#endif
 
 exit:
 	return ret;
@@ -705,11 +710,14 @@ static int rtw_pci_resume(struct pci_dev *pdev)
 	struct pwrctrl_priv *pwrpriv = dvobj_to_pwrctl(dvobj);
 	int	err = 0;
 
+#if 0 //modify to avoid restart during resume
 	err = pci_set_power_state(pdev, PCI_D0);
+	RTW_INFO("%s call pci_set_power_state ret=%d\n", __func__, err);
 	if (err != 0) {
 		RTW_INFO("%s Failed on pci_set_power_state (%d)\n", __func__, err);
 		goto exit;
 	}
+#endif
 
 	err = pci_enable_device(pdev);
 	if (err != 0) {
@@ -1048,8 +1056,8 @@ static int __init rtw_drv_entry(void)
 #ifdef CONFIG_PLATFORM_AML_S905
 #ifdef USE_AML_PCIE_TEE_MEM
 	//g_pcie_reserved_mem_dev = get_pcie_reserved_mem_dev();
-	//if (g_pcie_reserved_mem_dev)
-	//	RTW_PRINT("#######use amlogic pcie TEE protect mem#######\n");
+	if (g_pcie_reserved_mem_dev)
+		RTW_PRINT("#######use amlogic pcie TEE protect mem#######\n");
 #endif
 #endif
 

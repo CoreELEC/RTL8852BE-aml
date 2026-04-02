@@ -1989,11 +1989,16 @@ void dump_ht_cap_ie_content(void *sel, const u8 *buf, u32 buf_len);
 
 void dump_wps_ie(void *sel, const u8 *ie, u32 ie_len);
 
-RTW_FUNC_2G_5G_ONLY void rtw_ies_get_chbw(u8 *ies, int ies_len, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht);
 u8 *rtw_ies_get_he_6g_op_info_ie(u8 *ies, int ies_len);
-void rtw_ies_get_bchbw(u8 *ies, int ies_len, enum band_type *band, u8 *chan, u8 *bw,
-	u8 *offset, u8 *freq0, u8 *freq1, u8 ht, u8 vht, u8 he);
-void rtw_bss_get_chbw(WLAN_BSSID_EX *bss, enum band_type *band, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht, u8 he);
+
+RTW_FUNC_2G_5G_ONLY void rtw_ies_get_chbw(u8 *ies, int ies_len, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht);
+RTW_FUNC_2G_5G_ONLY void rtw_bss_get_chbw(WLAN_BSSID_EX *bss, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht);
+void rtw_ies_get_bchbw(u8 *ies, int ies_len, enum band_type *band, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht, u8 he, u8 eht);
+void rtw_bss_get_bchbw(WLAN_BSSID_EX *bss, enum band_type *band, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht, u8 he, u8 eht);
+
+struct rtw_chan_def;
+void rtw_ies_get_chdef(u8 *ies, int ies_len, struct rtw_chan_def *chdef, u8 ht, u8 vht, u8 he, u8 eht);
+void rtw_bss_get_chdef(WLAN_BSSID_EX *bss, struct rtw_chan_def *chdef, u8 ht, u8 vht, u8 he, u8 eht);
 
 u32 rtw_get_p2p_merged_ies_len(u8 *in_ie, u32 in_len);
 int rtw_p2p_merge_ies(u8 *in_ie, u32 in_len, u8 *merge_ie);

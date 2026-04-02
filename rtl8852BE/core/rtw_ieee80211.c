@@ -2623,29 +2623,28 @@ u8 *rtw_ies_get_he_6g_op_info_ie(u8 *ies, int ies_len)
 #endif /* CONFIG_80211AX_HE && CONFIG_IEEE80211_BAND_6GHZ */
 
 /**
- * rtw_ies_get_chbw - get operation ch, bw, offset from IEs of BSS.
+ * _rtw_ies_get_ch_settings - get operation ch, bw, offset from IEs of BSS.
  * @ies: pointer of the first tlv IE
  * @ies_len: length of @ies
+ * @band: pointer os band, used as output
  * @ch: pointer of ch, used as output
  * @bw: pointer of bw, used as output
  * @offset: pointer of offset, used as output
+ * @freq0: pointer of freq0, used as output
+ * @freq1: pointer of freq1, used as output
  * @ht: check HT IEs
  * @vht: check VHT IEs, if true imply ht is true
+ * @he: check HE IEs
+ * @eht: check EHT IEs
  */
-#if CONFIG_ALLOW_FUNC_2G_5G_ONLY
-RTW_FUNC_2G_5G_ONLY inline void rtw_ies_get_chbw(u8 *ies, int ies_len, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht)
+static void _rtw_ies_get_ch_settings(u8 *ies, int ies_len, enum band_type *band, u8 *ch, u8 *bw,
+	u8 *offset, u8 *freq0, u8 *freq1, u8 ht, u8 vht, u8 he, u8 eht)
 {
-	rtw_ies_get_bchbw(ies, ies_len, NULL, ch, bw, offset, NULL, NULL, ht, vht, 0);
-}
-#endif
-
-void rtw_ies_get_bchbw(u8 *ies, int ies_len, enum band_type *band, u8 *chan, u8 *bw,
-	u8 *offset, u8 *freq0, u8 *freq1, u8 ht, u8 vht, u8 he)
-{
+	enum band_type b;
 	u8 *p;
-	int	ie_len;
+	int ie_len;
 
-	*chan = 0;
+	*ch = 0;
 	*bw = CHANNEL_WIDTH_20;
 	*offset = CHAN_OFFSET_NO_EXT;
 	if (freq0)
@@ -2653,11 +2652,34 @@ void rtw_ies_get_bchbw(u8 *ies, int ies_len, enum band_type *band, u8 *chan, u8 
 	if (freq1)
 		*freq1 = 0;
 
+#ifdef CONFIG_80211AX_HE
+#if CONFIG_IEEE80211_BAND_6GHZ
+	if (he) {
+		u8 *_6g_op_info_ie = NULL;
+
+		_6g_op_info_ie = rtw_ies_get_he_6g_op_info_ie(ies, ies_len);
+
+		if (_6g_op_info_ie) {
+			*ch = GET_HE_OP_INFO_PRIMARY_CHAN(_6g_op_info_ie);
+			*bw = GET_HE_OP_INFO_CHAN_WIDTH(_6g_op_info_ie);
+			if (freq0)
+				*freq0 = GET_HE_OP_INFO_CHAN_CTR_FREQ_SEG0(_6g_op_info_ie);
+			if (freq1)
+				*freq1 = GET_HE_OP_INFO_CHAN_CTR_FREQ_SEG1(_6g_op_info_ie);
+			b = BAND_ON_6G;
+			if (rtw_get_offset_by_bchbw(BAND_ON_6G, *ch, *bw, offset))
+				goto bypass_ht_vht;
+			RTW_INFO("%s get 6ghz channel offset fail, chan=%u, bw=%u\n",
+				__func__, *ch, *bw);
+		}
+	}
+#endif /* CONFIG_IEEE80211_BAND_6GHZ */
+#endif /* CONFIG_80211AX_HE */
+
 	p = rtw_get_ie(ies, _DSSET_IE_, &ie_len, ies_len);
 	if (p && ie_len > 0) {
-		*chan = *(p + 2);
-		if (band)
-			*band = *chan > 14 ? BAND_ON_5G : BAND_ON_24G;
+		*ch = *(p + 2);
+		b = *ch > 14 ? BAND_ON_5G : BAND_ON_24G;
 	}
 
 #ifdef CONFIG_80211N_HT
@@ -2673,13 +2695,12 @@ void rtw_ies_get_bchbw(u8 *ies, int ies_len, enum band_type *band, u8 *chan, u8 
 
 		ht_op_ie = rtw_get_ie(ies, EID_HTInfo, &ht_op_ielen, ies_len);
 		if (ht_op_ie && ht_op_ielen) {
-			if (*chan == 0) {
-				*chan = GET_HT_OP_ELE_PRI_CHL(ht_op_ie + 2);
-				if(band)
-					*band = (*chan > 14) ? BAND_ON_5G : BAND_ON_24G;
-			} else if (*chan != 0 && *chan != GET_HT_OP_ELE_PRI_CHL(ht_op_ie + 2)) {
+			if (*ch == 0) {
+				*ch = GET_HT_OP_ELE_PRI_CHL(ht_op_ie + 2);
+				b = *ch > 14 ? BAND_ON_5G : BAND_ON_24G;
+			} else if (*ch != 0 && *ch != GET_HT_OP_ELE_PRI_CHL(ht_op_ie + 2)) {
 				RTW_INFO("%s ch inconsistent, DSSS:%u, HT primary:%u\n"
-					, __func__, *chan, GET_HT_OP_ELE_PRI_CHL(ht_op_ie + 2));
+					, __func__, *ch, GET_HT_OP_ELE_PRI_CHL(ht_op_ie + 2));
 			}
 
 			if (!GET_HT_OP_ELE_STA_CHL_WIDTH(ht_op_ie + 2))
@@ -2717,9 +2738,9 @@ void rtw_ies_get_bchbw(u8 *ies, int ies_len, enum band_type *band, u8 *chan, u8 
 					Correcting offset if *offset==HAL_PRIME_CHNL_OFFSET_DONT_CARE.
 					AP may support BW 80 for VHT, but only support BW 20 for HT, resulting in no offset being set.
 					*/
-					if (*offset == CHAN_OFFSET_NO_EXT && !rtw_get_offset_by_bchbw(*band, *chan, *bw, offset)) {
+					if (*offset == CHAN_OFFSET_NO_EXT && !rtw_get_offset_by_bchbw(b, *ch, *bw, offset)) {
 						RTW_INFO("%s get channel offset fail, band=%u, chan=%u, bw=%u\n",
-							__func__, *band, *chan, *bw);
+							__func__, b, *ch, *bw);
 					}
 				}
 			}
@@ -2730,35 +2751,36 @@ void rtw_ies_get_bchbw(u8 *ies, int ies_len, enum band_type *band, u8 *chan, u8 
 
 #ifdef CONFIG_80211AX_HE
 #if CONFIG_IEEE80211_BAND_6GHZ
-	if (he) {
-		u8 *_6g_op_info_ie = NULL;
-
-		_6g_op_info_ie = rtw_ies_get_he_6g_op_info_ie(ies, ies_len);
-
-		if (_6g_op_info_ie) {
-			*chan = GET_HE_OP_INFO_PRIMARY_CHAN(_6g_op_info_ie);
-			*bw = GET_HE_OP_INFO_CHAN_WIDTH(_6g_op_info_ie);
-			if (freq0)
-				*freq0 = GET_HE_OP_INFO_CHAN_CTR_FREQ_SEG0(_6g_op_info_ie);
-			if (freq1)
-				*freq1 = GET_HE_OP_INFO_CHAN_CTR_FREQ_SEG1(_6g_op_info_ie);
-			if (band)
-				*band = BAND_ON_6G;
-			if (!rtw_get_offset_by_bchbw(BAND_ON_6G, *chan, *bw, offset)) {
-				RTW_INFO("%s get 6ghz channel offset fail, chan=%u, bw=%u\n",
-					__func__, *chan, *bw);
-			}
-		}
-	}
-#endif
+bypass_ht_vht:
+#endif /* CONFIG_IEEE80211_BAND_6GHZ */
 #endif /* CONFIG_80211AX_HE */
+
+	if (band)
+		*band = b;
+	return;
 }
 
-void rtw_bss_get_chbw(WLAN_BSSID_EX *bss, enum band_type *band, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht, u8 he)
+#if CONFIG_ALLOW_FUNC_2G_5G_ONLY
+RTW_FUNC_2G_5G_ONLY void rtw_ies_get_chbw(u8 *ies, int ies_len, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht)
 {
-	rtw_ies_get_bchbw(bss->IEs + _FIXED_IE_LENGTH_
-		, bss->IELength - _FIXED_IE_LENGTH_
-		, band, ch, bw, offset, NULL, NULL, ht, vht, he);
+	_rtw_ies_get_ch_settings(ies, ies_len, NULL, ch, bw, offset, NULL, NULL, ht, vht, false, false);
+}
+
+RTW_FUNC_2G_5G_ONLY void rtw_bss_get_chbw(WLAN_BSSID_EX *bss, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht)
+{
+	rtw_bss_get_bchbw(bss, NULL, ch, bw, offset, ht, vht, false, false);
+}
+#endif
+
+void rtw_ies_get_bchbw(u8 *ies, int ies_len, enum band_type *band, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht, u8 he, u8 eht)
+{
+	_rtw_ies_get_ch_settings(ies, ies_len, band, ch, bw, offset, NULL, NULL, ht, vht, he, eht);
+}
+
+void rtw_bss_get_bchbw(WLAN_BSSID_EX *bss, enum band_type *band, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht, u8 he, u8 eht)
+{
+	_rtw_ies_get_ch_settings(BSS_EX_TLV_IES(bss), BSS_EX_TLV_IES_LEN(bss)
+		, band, ch, bw, offset, NULL, NULL, ht, vht, he, eht);
 
 	if (*ch == 0) {
 		*ch = bss->Configuration.DSConfig;
@@ -2771,6 +2793,50 @@ void rtw_bss_get_chbw(WLAN_BSSID_EX *bss, enum band_type *band, u8 *ch, u8 *bw, 
 		*band = bss->Configuration.Band;
 		rtw_warn_on(1);
 	}
+}
+
+void rtw_ies_get_chdef(u8 *ies, int ies_len, struct rtw_chan_def *chdef, u8 ht, u8 vht, u8 he, u8 eht)
+{
+	enum band_type band;
+	u8 ch, bw, offset, freq0, freq1;
+
+	_rtw_ies_get_ch_settings(ies, ies_len
+		, &band, &ch, &bw, &offset, &freq0, &freq1, ht, vht, he, eht);
+
+	chdef->band = band;
+	chdef->chan = ch;
+	chdef->bw = bw;
+	chdef->offset = offset;
+	chdef->center_freq1 = freq0;
+	chdef->center_freq2 = freq1;
+}
+
+void rtw_bss_get_chdef(WLAN_BSSID_EX *bss, struct rtw_chan_def *chdef, u8 ht, u8 vht, u8 he, u8 eht)
+{
+	enum band_type band;
+	u8 ch, bw, offset, freq0, freq1;
+
+	_rtw_ies_get_ch_settings(BSS_EX_TLV_IES(bss), BSS_EX_TLV_IES_LEN(bss)
+		, &band, &ch, &bw, &offset, &freq0, &freq1, ht, vht, he, eht);
+
+	if (ch == 0) {
+		ch = bss->Configuration.DSConfig;
+		band = bss->Configuration.Band;
+	}
+	else if (ch != bss->Configuration.DSConfig) {
+		RTW_INFO("inconsistent ch - ies:%u bss->Configuration.DSConfig:%u\n"
+			 , ch, bss->Configuration.DSConfig);
+		ch = bss->Configuration.DSConfig;
+		band = bss->Configuration.Band;
+		rtw_warn_on(1);
+	}
+
+	chdef->band = band;
+	chdef->chan = ch;
+	chdef->bw = bw;
+	chdef->offset = offset;
+	chdef->center_freq1 = freq0;
+	chdef->center_freq2 = freq1;
 }
 
 /**

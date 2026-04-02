@@ -562,6 +562,7 @@ u8 rtw_run_in_thread_cmd_wait(_adapter *adapter, void (*func)(void *), void *con
 struct ssmps_cmd_parm {
 	struct sta_info *sta;
 	u8 smps;
+	u8 retry_cnt;
 };
 u8 rtw_ssmps_wk_cmd(_adapter *adapter, struct sta_info *sta, u8 smps, u8 enqueue);
 

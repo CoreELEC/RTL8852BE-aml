@@ -5603,6 +5603,13 @@ static int	cfg80211_rtw_del_beacon(struct wiphy *wiphy, struct net_device *ndev)
 #else
 static int rtw_cfg80211_set_beacon_ies(struct net_device *net, const u8 *head,
 				       int head_len, const u8 *tail, int tail_len);
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
+#define cfg80211_ap_settings_to_ieee80211_channel(s) (s)->chandef.chan
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0))
+#define cfg80211_ap_settings_to_ieee80211_channel(s) (s)->channel
+#endif
+
 static int cfg80211_rtw_start_ap(struct wiphy *wiphy, struct net_device *ndev,
 		struct cfg80211_ap_settings *settings)
 {
@@ -5612,6 +5619,8 @@ static int cfg80211_rtw_start_ap(struct wiphy *wiphy, struct net_device *ndev,
 	struct mlme_ext_info *pmlmeinfo = &(pmlmeext->mlmext_info);
 	/* ToDo CONFIG_RTW_MLD: [currently primary link only] */
 	struct _ADAPTER_LINK *adapter_link = GET_PRIMARY_LINK(adapter);
+	struct link_mlme_priv *lmlmepriv = &(adapter_link->mlmepriv);
+	WLAN_BSSID_EX *lbss_network = (WLAN_BSSID_EX *)&lmlmepriv->cur_network.network;
 
 	if (adapter_to_dvobj(adapter)->wpas_type == RTW_WPAS_W1FI) {
 		/* turn on the beacon send */
@@ -5645,6 +5654,16 @@ static int cfg80211_rtw_start_ap(struct wiphy *wiphy, struct net_device *ndev,
 
 	rtw_mi_scan_abort(adapter, _TRUE);
 	rtw_mi_buddy_set_scan_deny(adapter, 300);
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0))
+	if (cfg80211_ap_settings_to_ieee80211_channel(settings)) {
+		struct ieee80211_channel *chan = cfg80211_ap_settings_to_ieee80211_channel(settings);
+
+		lbss_network->Configuration.Band = nl80211_band_to_rtw_band(chan->band);
+		lbss_network->Configuration.DSConfig = chan->hw_value;
+	}
+#endif
+
 	ret = rtw_add_beacon(adapter, settings->beacon.head, settings->beacon.head_len,
 		settings->beacon.tail, settings->beacon.tail_len);
 
@@ -11045,73 +11064,80 @@ void rtw_cfg80211_external_auth_status(struct wiphy *wiphy, struct net_device *d
 	}
 
 	psta = rtw_get_stainfo(pstapriv, params->bssid);
-	if (psta && (params->status == WLAN_STATUS_SUCCESS)\
-		&& MLME_IS_AP(padapter)) {
-		/* AP mode */
-		RTW_INFO("station match\n");
 
-		psta->state &= ~WIFI_FW_AUTH_NULL;
-		psta->state |= WIFI_FW_AUTH_SUCCESS;
-		psta->expire_to = padapter->stapriv.assoc_to;
+	if (!psta)
+		return;
 
-		/* ToDo: Kernel v5.1 pmkid is pointer */
-		/* RTW_INFO_DUMP("PMKID:", params->pmkid, PMKID_LEN); */
-		_rtw_set_pmksa(dev, params->bssid, params->pmkid);
+	if (MLME_IS_AP(padapter)) {
+		if (params->status == WLAN_STATUS_SUCCESS) {
+			/* AP mode */
+			RTW_INFO("station match\n");
 
-		_rtw_spinlock_bh(&psta->lock);
-		if ((psta->auth_len != 0) && (psta->pauth_frame != NULL)) {
-			buf =  rtw_zmalloc(psta->auth_len);
+			psta->state &= ~WIFI_FW_AUTH_NULL;
+			psta->state |= WIFI_FW_AUTH_SUCCESS;
+			psta->expire_to = padapter->stapriv.assoc_to;
+
+			/* ToDo: Kernel v5.1 pmkid is pointer */
+			/* RTW_INFO_DUMP("PMKID:", params->pmkid, PMKID_LEN); */
+			_rtw_set_pmksa(dev, params->bssid, params->pmkid);
+
+			_rtw_spinlock_bh(&psta->lock);
+			if ((psta->auth_len != 0) && (psta->pauth_frame != NULL)) {
+				buf =  rtw_zmalloc(psta->auth_len);
+				if (buf) {
+					_rtw_memcpy(buf, psta->pauth_frame, psta->auth_len);
+					len = psta->auth_len;
+				}
+
+				rtw_mfree(psta->pauth_frame, psta->auth_len);
+				psta->pauth_frame = NULL;
+				psta->auth_len = 0;
+			}
+			_rtw_spinunlock_bh(&psta->lock);
+
 			if (buf) {
-				_rtw_memcpy(buf, psta->pauth_frame, psta->auth_len);
-				len = psta->auth_len;
+				struct _ADAPTER_LINK *padapter_link = psta->padapter_link;
+				struct link_mlme_ext_priv *pmlmeext = &(padapter_link->mlmeextpriv);
+				/* send the SAE auth Confirm */
+
+				{
+					rtw_mi_set_scan_deny(padapter, 1000);
+					rtw_mi_scan_abort(padapter, _TRUE);
+
+					RTW_INFO("SAE: Tx auth Confirm\n");
+					rtw_mgnt_tx_cmd(padapter, pmlmeext->chandef.band, pmlmeext->chandef.chan, 1, buf, len, 0, RTW_CMDF_DIRECTLY);
+
+				}
+
+				rtw_mfree(buf, len);
+				buf = NULL;
+				len = 0;
 			}
 
-			rtw_mfree(psta->pauth_frame, psta->auth_len);
-			psta->pauth_frame = NULL;
-			psta->auth_len = 0;
-		}
-		_rtw_spinunlock_bh(&psta->lock);
-
-		if (buf) {
-			struct _ADAPTER_LINK *padapter_link = psta->padapter_link;
-			struct link_mlme_ext_priv *pmlmeext = &(padapter_link->mlmeextpriv);
-			/* send the SAE auth Confirm */
-
-			{
-				rtw_mi_set_scan_deny(padapter, 1000);
-				rtw_mi_scan_abort(padapter, _TRUE);
-
-				RTW_INFO("SAE: Tx auth Confirm\n");
-				rtw_mgnt_tx_cmd(padapter, pmlmeext->chandef.band, pmlmeext->chandef.chan, 1, buf, len, 0, RTW_CMDF_DIRECTLY);
-
+		} else { /* AP fail */
+#ifdef CONFIG_AP_MODE
+			if (!MLME_IS_MESH(padapter)) {
+#ifdef CONFIG_NATIVEAP_MLME
+				issue_auth(padapter, psta, (unsigned short)params->status);
+#endif
+				/* Free sta_info, phl_sta, mld */
+				RTW_INFO("%s : free  sta_info, phl_sta, mld, for sa="MAC_FMT"\n",
+					__func__, MAC_ARG(psta->phl_sta->mac_addr));
+				pmld = rtw_phl_get_mld_by_addr(d->phl, padapter->phl_role, psta->phl_sta->mac_addr);
+				rtw_phl_free_mld(GET_PHL_INFO(adapter_to_dvobj(padapter)), pmld);
+				rtw_free_stainfo_sw(padapter , psta);
 			}
-
-			rtw_mfree(buf, len);
-			buf = NULL;
-			len = 0;
+#endif
 		}
-	} else {
-		/* STA mode */
+
+	} else { /* STA mode */
 		psecuritypriv->extauth_status = params->status;
 
-		if (!psta || !psta->phl_sta) {
-			RTW_WARN(FUNC_ADPT_FMT " psta(%p) or phl_sta is NULL\n",
+		if (!psta->phl_sta) {
+			RTW_WARN(FUNC_ADPT_FMT " psta(%p) phl_sta is NULL\n",
 				FUNC_ADPT_ARG(padapter), psta);
 			return;
 		}
-#ifdef CONFIG_AP_MODE
-		if (psta && (MLME_IS_AP(padapter) || !MLME_IS_MESH(padapter))) {
-#ifdef CONFIG_NATIVEAP_MLME
-			issue_auth(padapter, psta, (unsigned short)params->status);
-#endif
-			/* Free sta_info, phl_sta, mld */
-			RTW_INFO("%s : free  sta_info, phl_sta, mld, for sa="MAC_FMT"\n",
-				__func__, MAC_ARG(psta->phl_sta->mac_addr));
-			pmld = rtw_phl_get_mld_by_addr(d->phl, padapter->phl_role, psta->phl_sta->mac_addr);
-			rtw_phl_free_mld(GET_PHL_INFO(adapter_to_dvobj(padapter)), pmld);
-			rtw_free_stainfo_sw(padapter , psta);
-		}
-#endif
 	}
 }
 

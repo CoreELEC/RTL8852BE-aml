@@ -11985,10 +11985,8 @@ void update_join_link_info(struct _ADAPTER *a, struct _ADAPTER_LINK *alink, stru
 	}
 
 	/*get chan/bw/offset info from IEs*/
-	rtw_bss_get_chbw(pnetwork, &alink->mlmeextpriv.chandef.band,
-			 &alink->mlmeextpriv.chandef.chan, (u8 *)&alink->mlmeextpriv.chandef.bw,
-			 (u8 *)&alink->mlmeextpriv.chandef.offset, pmlmeinfo->HT_caps_enable,
-			 pmlmeinfo->VHT_enable, pmlmeinfo->HE_enable);
+	rtw_bss_get_chdef(pnetwork, &alink->mlmeextpriv.chandef, pmlmeinfo->HT_caps_enable,
+			 pmlmeinfo->VHT_enable, pmlmeinfo->HE_enable, false);
 
 	/*adjust chan/bw/offset with registary and hw cap*/
 	rtw_adjust_bchbw(a, alink->mlmeextpriv.chandef.band, alink->mlmeextpriv.chandef.chan,

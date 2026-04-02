@@ -142,6 +142,7 @@ struct wow_priv {
 	u32 apf_active_tp_th;
 	u8 dump_apf_ram;
 #endif
+	struct aoac_report wowlan_aoac_rpt;
 #ifdef CONFIG_WOW_PERIODIC_WAKE
 	struct rtw_periodic_wake_info wow_periodic_wake;
 #endif
@@ -165,6 +166,7 @@ void rtw_wow_pattern_sw_dump(_adapter *adapter);
 void rtw_construct_remote_control_info(_adapter *adapter,
 				       struct rtw_remote_wake_ctrl_info *ctrl_info);
 void rtw_core_wow_handle_wake_up_rsn(void *drv_priv, u8 rsn);
+void rtw_core_wow_handle_wake_up_pattern_idx(void *drv_priv, u8 pattern_idx);
 #ifdef CONFIG_GTK_OL
 void rtw_update_gtk_ofld_info(void *drv_priv, struct rtw_aoac_report *aoac_info,
 			      u8 aoac_report_get_ok, u8 phase);

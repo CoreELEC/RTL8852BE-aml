@@ -1697,7 +1697,7 @@ static int _rtw_get_bcn_keys(u8 *cap_info, u32 buf_len, u8 def_ch
 		recv_beacon->proto_cap |= PROTO_CAP_11AX;
 
 	/* check bw and channel offset */
-	rtw_ies_get_bchbw(pos, left, &recv_beacon->band, &recv_beacon->ch, &recv_beacon->bw, &recv_beacon->offset, NULL, NULL, 1, 1, 1);
+	rtw_ies_get_bchbw(pos, left, &recv_beacon->band, &recv_beacon->ch, &recv_beacon->bw, &recv_beacon->offset, 1, 1, 1, 1);
 	if (!recv_beacon->ch)
 		recv_beacon->ch = def_ch;
 
