@@ -1922,14 +1922,14 @@ u32 fw_st_dbg_dump(struct mac_ax_adapter *adapter)
 	PLTFM_MSG_ALWAYS("R_AX_LDO_AON_CTRL0(0x%04X) = 0x%08X\n",
 			 R_AX_LDO_AON_CTRL0, MAC_REG_R32(R_AX_LDO_AON_CTRL0));
 
-	if (mac_io_chk_access(adapter, R_PL_AXIDMA_CH0_RXBD_IDX) == MACSUCCESS) {
+	if (mac_io_chk_access(adapter, R_AX_INDIR_ACCESS_ENTRY) == MACSUCCESS) {
 		ret = mac_sram_dbg_read(adapter, R_PL_AXIDMA_CH0_RXBD_IDX, &val32, AXIDMA_SEL);
 		if (ret != MACSUCCESS)
 			PLTFM_MSG_ERR("%s read sram fail %d\n", __func__, ret);
 		PLTFM_MSG_ALWAYS("R_PL_AXIDMA_CH0_RXBD_IDX(0x%04X) = 0x%08X\n",
 				 R_PL_AXIDMA_CH0_RXBD_IDX, val32);
 	}
-	if (mac_io_chk_access(adapter, R_PL_AXIDMA_CH1_RXBD_IDX) == MACSUCCESS) {
+	if (mac_io_chk_access(adapter, R_AX_INDIR_ACCESS_ENTRY) == MACSUCCESS) {
 		ret = mac_sram_dbg_read(adapter, R_PL_AXIDMA_CH1_RXBD_IDX, &val32, AXIDMA_SEL);
 		if (ret != MACSUCCESS)
 			PLTFM_MSG_ERR("%s read sram fail %d\n", __func__, ret);
